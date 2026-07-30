@@ -1,1 +1,37 @@
-.DSStore
+# =======
+# Python
+# =======
+__pycache__/
+.pytest_cache/
+
+
+# =======
+# Virtual Environment
+# =======
+.venv/
+
+
+# =======
+# Environment Variables
+# =======
+.env
+!.env.example
+
+
+# =======
+# MacOS
+# =======
+.DS_Store
+.LSOverride
+
+
+# =======
+# IDE
+# =======
+.vscode/
+
+
+# =======
+# Log files
+# =======
+*.log
