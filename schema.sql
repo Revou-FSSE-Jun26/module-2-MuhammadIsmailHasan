@@ -40,6 +40,7 @@ CREATE TABLE order_items (
     order_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
     price_ordered NUMERIC(14, 2) NOT NULL,
+    quantity_ordered INTEGER DEFAULT 0 NOT NULL,
     discount NUMERIC(3, 2),
     PRIMARY KEY (order_id, product_id),
     CONSTRAINT fk_oi_order 
