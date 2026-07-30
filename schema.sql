@@ -6,7 +6,7 @@ CREATE TABLE categories (
 
 CREATE TABLE products (
     id SERIAL PRIMARY KEY,
-    category_id INTEGER NOT NULL,
+    category_id INTEGER,
     name VARCHAR(255) NOT NULL,
     description VARCHAR(1000),
     price NUMERIC(11, 2) NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE order_items (
     discount NUMERIC(3, 2),
     PRIMARY KEY (order_id, product_id),
     CONSTRAINT fk_oi_order 
-        FOREIGN KEY (order_id)  REFERENCES orders(id)
+        FOREIGN KEY (order_id) REFERENCES orders(id)
         ON DELETE CASCADE,
     CONSTRAINT fk_oi_product
         FOREIGN KEY (product_id) REFERENCES products(id)
