@@ -1,1 +1,35 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/wGq_UtnU)
+# Revoshop
+
+Revoshop is a simple e-commerce application built for learning backend development and PostgreSQL.
+
+This project demonstrates basic CRUD operations and database relationships.
+
+## Features
+
+- User Management
+- Product Management
+- Product Categories
+- Orders
+- Order Items
+
+## Tech Stack
+
+- Python
+- Flask
+- PostgreSQL
+- SQLAlchemy
+- Reactjs and Typescript
+
+## Database
+
+This project uses **PostgreSQL** as the database.
+
+### Tables
+
+| Table | Description |
+|--------|-------------|
+| users | Store user information |
+| product_categories | Store product categories |
+| products | Store product information |
+| orders | Store customer orders |
+| order_items | Store products inside an order |
