@@ -1,6 +1,10 @@
 # Revoshop
-Revoshop is a simple e-commerce application built for learning backend development and PostgreSQL.
-This project demonstrates basic CRUD operations and database relationships.
+**Revoshop** is a simple e-commerce application built for learning backend development and PostgreSQL.
+
+## Description
+
+Revoshop is a learning project that demonstrates the core features of an e-commerce system, including users, product categories, products, orders, and order items. It is designed for beginners who want to practice database design, SQL queries, and CRUD operations while understanding relationships, constraints, and indexing in PostgreSQL. The project serves as a hands-on example for building a solid foundation in backend development.
+
 
 ## Features
 
@@ -105,3 +109,22 @@ This project uses **PostgreSQL** as the database.
    ```
 
 ---
+
+## Database Creation
+
+### Steps
+
+1. Open **Navicat Premium** and connect to your PostgreSQL server.
+2. Right-click the connection and select **New Database**.
+3. Enter ```revoshop_db``` as the database name.
+4. Click **OK** to create the database.
+5. Refresh the connection if necessary.
+6. Verify that ```revoshop_db``` appears in the server tree under the PostgreSQL connection.
+
+### Expected Result
+
+The database ```revoshop_db``` is successfully created and visible in the Navicat server tree.
+
+> **Note:** This guide uses **Navicat Premium** for the database setup. If you use a different PostgreSQL GUI tool (such as pgAdmin, DBeaver), feel free to follow the equivalent steps in your application. Although the interface may differ, the overall process of creating a database is generally very similar.
+
+
