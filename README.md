@@ -14,6 +14,7 @@ Revoshop is a learning project that demonstrates the core features of an e-comme
 - Orders
 - Order Items
 
+
 ## Tech Stack
 
 - Python
@@ -22,9 +23,11 @@ Revoshop is a learning project that demonstrates the core features of an e-comme
 - SQLAlchemy
 - Reactjs and Typescript
 
+
 ## Database
 
 This project uses **PostgreSQL** as the database.
+
 
 ### Tables
 
@@ -102,13 +105,73 @@ This project uses **PostgreSQL** as the database.
    - **Password** for the `postgres` user
    - **Port:** `5432` (default)
 
-4. After installation, open your terminal and verify the installation with:
+4. After installation, open **SQL Shell (psql)** or your favorite terminal and verify the installation with:
 
    ```
    psql --version
    ```
 
+
+## Configure the PostgreSQL Superuser Password
+
+The default PostgreSQL superuser is **`postgres`**. If you need to set or change its password, follow the steps for your operating system.
+
+### macOS (Homebrew)
+
+1. Connect to PostgreSQL as the current local user.
+
+   ```bash
+   psql postgres
+   ```
+
+2. Change the password for the `postgres` user.
+
+   ```sql
+   ALTER USER postgres WITH PASSWORD 'your_secure_password';
+   ```
+
+3. Exit the PostgreSQL shell.
+
+   ```sql
+   \q
+   ```
+
+4. Verify that you can connect using the `postgres` user.
+
+   ```bash
+   psql -U postgres -d postgres -W
+   ```
+
+   Enter the password when prompted.
+
 ---
+
+### Windows
+
+1. Open **SQL Shell (psql)** or your favorite terminal.
+
+2. Log in as the `postgres` user.
+
+3. Run the following SQL command:
+
+   ```sql
+   ALTER USER postgres WITH PASSWORD 'your_secure_password';
+   ```
+
+4. Exit the PostgreSQL shell.
+
+   ```sql
+   \q
+   ```
+
+5. Verify the new password.
+
+   ```bash
+   psql -U postgres -d postgres -W
+   ```
+
+   Enter the password when prompted.
+
 
 ## Database Creation
 
@@ -125,6 +188,26 @@ This project uses **PostgreSQL** as the database.
 
 The database ```revoshop_db``` is successfully created and visible in the Navicat server tree.
 
+![Created Database](./created_db.png)
+
+
 > **Note:** This guide uses **Navicat Premium** for the database setup. If you use a different PostgreSQL GUI tool (such as pgAdmin, DBeaver), feel free to follow the equivalent steps in your application. Although the interface may differ, the overall process of creating a database is generally very similar.
+
+
+## Usage
+
+After creating the `revoshop_db` database, execute the SQL scripts in the following order:
+
+1. **`schema.sql`**
+   Creates the database tables, constraints, and indexes.
+
+2. **`seed.sql`**
+   Inserts sample data into the tables, including categories, products, users, orders, and order items.
+
+3. **`queries.sql`**
+   Contains example SQL queries for practicing and exploring PostgreSQL features
+
+Run each script using your favorite PostgreSQL GUI tool (such as Navicat Premium, pgAdmin, DBeaver, or the `psql` CLI tool) against the `revoshop_db` database.
+
 
 
