@@ -9,7 +9,9 @@ CREATE TABLE products (
     category_id INTEGER,
     name VARCHAR(255) NOT NULL,
     description VARCHAR(1000),
-    price NUMERIC(11, 2) NOT NULL,
+    price NUMERIC(11, 2) NOT NULL
+			CONSTRAINT price_positive 
+			CHECK (price > 0),
     stock INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW(),
     CONSTRAINT fk_products_category 
@@ -28,8 +30,12 @@ CREATE TABLE users (
 CREATE TABLE orders (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
-    total_amount NUMERIC(14, 2) NOT NULL,
-    status VARCHAR(25) NOT NULL DEFAULT 'waitingForPayment',
+    total_amount NUMERIC(14, 2) NOT NULL
+			CONSTRAINT total_amount_positive
+			CHECK (total_amount >= 0),
+    status VARCHAR(25) NOT NULL DEFAULT 'waitingForPayment'
+			CONSTRAINT status_valid 
+			CHECK (status IN ('waitingForPayment', 'processing', 'shipped', 'delivered', 'cancelled')),
     ordered_at TIMESTAMP DEFAULT NOW(),
     CONSTRAINT fk_orders_user 
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -39,8 +45,12 @@ CREATE TABLE orders (
 CREATE TABLE order_items (
     order_id INTEGER NOT NULL,
     product_id INTEGER NOT NULL,
-    price_ordered NUMERIC(14, 2) NOT NULL,
-    quantity_ordered INTEGER DEFAULT 0 NOT NULL,
+    price_ordered NUMERIC(14, 2) NOT NULL
+			CONSTRAINT price_ordered_positive
+			CHECK (price_ordered >= 0),
+    quantity_ordered INTEGER DEFAULT 1 NOT NULL
+			CONSTRAINT quantity_ordered_positive 
+			CHECK (quantity_ordered > 0),
     discount NUMERIC(3, 2),
     PRIMARY KEY (order_id, product_id),
     CONSTRAINT fk_oi_order 
