@@ -40,7 +40,7 @@ This project uses **PostgreSQL** as the database.
 | order_items | Store products inside an order |
 
 ### Diagram Schema
-![Diagram Schema](./diagram.png)
+![Diagram Schema](./images/diagram.png)
 
 ## PostgreSQL Installation
 
@@ -188,7 +188,7 @@ The default PostgreSQL superuser is **`postgres`**. If you need to set or change
 
 The database ```revoshop_db``` is successfully created and visible in the Navicat server tree.
 
-![Created Database](./created_db.png)
+![Created Database](./images/created_db.png)
 
 
 > **Note:** This guide uses **Navicat Premium** for the database setup. If you use a different PostgreSQL GUI tool (such as pgAdmin, DBeaver), feel free to follow the equivalent steps in your application. Although the interface may differ, the overall process of creating a database is generally very similar.
