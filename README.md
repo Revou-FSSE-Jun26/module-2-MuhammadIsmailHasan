@@ -64,7 +64,7 @@ revoshop/
 
 ### Database Diagram
 
-![Schema Diagram](./images/diagram.png)
+![Schema Diagram](./images/diagram-2.png)
 
 ## Setup
 
