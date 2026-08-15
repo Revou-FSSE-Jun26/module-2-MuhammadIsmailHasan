@@ -14,7 +14,13 @@ def init_app():
 
     db.init_app(app)
 
-    print("Flask app initialized successfully.")
+    with app.app_context():
+        try:
+            print("Creating database tables...")
+            db.create_all()
+        except Exception as e:
+            print(f"Error creating tables: {e}")
+
     return app
 
 app = init_app()
