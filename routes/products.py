@@ -27,12 +27,37 @@ def get_products():
 def create_product():
     data = request.get_json()
     
+    if not data.get('name'):
+        return jsonify({
+            'message': "product name is required",
+            'status': False,
+        }), 400
+    
+    if data.get('price') is None:
+        return jsonify({
+            'message': "product price is required",
+            'status': False,
+        }), 400
+    
+    try:
+        price = float(data.get('price'))
+        if price <= 0:
+            return jsonify({
+                'message': "product price must be greater than 0",
+                'status': False,
+            }), 400
+    except (ValueError, TypeError):
+        return jsonify({
+            'message': "product price must be a valid number",
+            'status': False,
+        }), 400
+    
     try:
         product = Product(
             name=data.get('name'),
             description=data.get('description'),
-            price=data.get('price'),
-            stock=data.get('stock')
+            price=price,
+            stock=data.get('stock', 0)
         )
         
         db.session.add(product)
@@ -88,25 +113,39 @@ def update_product(product_id):
                 'status': False,
             }), 404 
 
+        # Validate price if provided
+        if 'price' in data:
+            try:
+                price = float(data['price'])
+                if price <= 0:
+                    return jsonify({
+                        'message': "product price must be greater than 0",
+                        'status': False,
+                    }), 400
+                product.price = price
+            except (ValueError, TypeError):
+                return jsonify({
+                    'message': "product price must be a valid number",
+                    'status': False,
+                }), 400
             
         if 'name' in data :
             product.name = data['name']
-        if 'price' in data :
-            product.price = data['price']
         if 'stock' in data :
             product.stock = data['stock']
         
         db.session.commit()
         
         return jsonify({
-                'message': 'success get product',
+                'message': 'success update product',
                 'status': True,
                 'data' : product.to_dict()
             }), 200
         
     except Exception as error :
+        db.session.rollback()
         return jsonify({
-            'message': "failed to create product",
+            'message': "failed to update product",
             'status': False,
             'error': str(error)
         }), 500  
