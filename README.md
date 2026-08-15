@@ -163,9 +163,9 @@ Test coverage:
 ```json
 POST /users/register
 {
-  "username": "john_doe",
-  "email": "john@example.com",
-  "password": "secure_password",
+  "username": "ken",
+  "email": "ken@gmail.com",
+  "password": "12345",
   "role": "user"
 }
 ```
@@ -173,20 +173,20 @@ POST /users/register
 **Response (201 Created):**
 ```json
 {
-  "message": "user created",
-  "status": true,
-  "data": {
-    "id": 33,
-    "username": "john_doe",
-    "email": "john@example.com",
-    "role": "user",
-    "created_at": "2026-08-15T16:09:52.791313",
-    "last_login": null
-  }
+	"data": {
+		"created_at": "2026-08-15T16:11:28.672574",
+		"email": "ken@gmail.com",
+		"id": 34,
+		"last_login": null,
+		"role": "user",
+		"username": "ken"
+	},
+	"message": "user created",
+	"status": true
 }
 ```
 
-**Test Result:** ✅ Success - User registered with ID=33
+**Test Result:** ✅ Success - User registered with ID=34
 
 **Insomnia Screenshot:**
 ![Register User](./images/tests/register%20user.png)
@@ -212,16 +212,16 @@ GET /users/1
 **Response (200 OK):**
 ```json
 {
-  "message": "success get user data",
-  "status": true,
-  "data": {
-    "id": 1,
-    "username": "john_doe",
-    "email": "john@example.com",
-    "role": "admin",
-    "created_at": "2026-08-15T15:31:36.842808",
-    "last_login": "2026-08-14T15:31:35.247572"
-  }
+	"data": {
+		"created_at": "2026-08-15T16:03:10.325628",
+		"email": "alice@example.com",
+		"id": 24,
+		"last_login": "2026-08-14T16:03:09.933791",
+		"role": "user",
+		"username": "alice_brown"
+	},
+	"message": "success get user data",
+	"status": true
 }
 ```
 
@@ -229,6 +229,11 @@ GET /users/1
 
 **Insomnia Screenshot:**
 ![Get User Success](./images/tests/get%20user%20by%20id%20success.png)
+
+**Test Result:** 😔 Success - User not found
+
+**Insomnia Screenshot:**
+![Get User Failed](./images/tests/get%20user%20by%20id%20failed.png)
 
 ---
 
@@ -363,6 +368,12 @@ GET /products/1
 
 **Insomnia Screenshot:**
 ![Get Product by ID Success](./images/tests/get%20products%20by%20id%20success.png)
+
+**Test Result:** 😔 Failed - Product not found
+
+**Insomnia Screenshot:**
+![Get Product by ID Success](./images/tests/get%20product%20by%20id%20failed.png)
+
 
 ---
 
