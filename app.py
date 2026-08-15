@@ -1,7 +1,12 @@
 from flask import Flask, jsonify
 from utils import db
-import os
 from dotenv import load_dotenv
+from flask_migrate import Migrate
+from models.category import Category
+from models.product import Product
+from models.user import User
+from models.order import Order
+import os
 
 load_dotenv()
 
@@ -13,14 +18,8 @@ def init_app():
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = os.getenv("DATABASE_TRACK_MODIFICATION")
 
     db.init_app(app)
-
-    with app.app_context():
-        try:
-            print("Creating database tables...")
-            db.create_all()
-        except Exception as e:
-            print(f"Error creating tables: {e}")
-
+    migrate = Migrate(app, db)
+    
     return app
 
 app = init_app()
