@@ -10,6 +10,9 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    role = db.Column(db.String(50), nullable=False, server_default='user')
+    last_login = db.Column(db.DateTime)
+    
     orders = db.relationship('Order', backref='buyer', lazy=True)
     
     def to_dict(self):
@@ -17,5 +20,7 @@ class User(db.Model):
             'id': self.id,
             'username': self.username,
             'email': self.email,
+            'role': self.role,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
