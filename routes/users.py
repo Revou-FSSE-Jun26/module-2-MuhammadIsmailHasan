@@ -27,11 +27,29 @@ def register_user():
                 'status': False,
             }), 400 
     
+    existing_user = User.query.filter_by(username=data.get('username')).first()
+    if existing_user:
+        return jsonify({
+            'message': "username already exists",
+            'status': False,
+            'error': "this username is already registered"
+        }), 409
+    
+    # Check if email already exists
+    existing_email = User.query.filter_by(email=data.get('email')).first()
+    if existing_email:
+        return jsonify({
+            'message': "email already exists",
+            'status': False,
+            'error': "this email is already registered"
+        }), 409
+    
     try:
         new_user = User(
             username=data.get('username'),
             email=data.get('email'),
-            password_hash = bcrypt.hashpw(data["password"].encode("utf-8"), bcrypt.gensalt())
+            password_hash = bcrypt.hashpw(data["password"].encode("utf-8"), bcrypt.gensalt()),
+            role=data.get('role', 'user')
         )
         
         db.session.add(new_user)
@@ -46,11 +64,25 @@ def register_user():
     except IntegrityError as error:
         db.session.rollback()
         
-        return jsonify({
-            'message': "username already exists",
-            'status': False,
-            'error': "this username is already registered"
-        }), 409 
+        error_message = str(error)
+        if 'username' in error_message.lower():
+            return jsonify({
+                'message': "username already exists",
+                'status': False,
+                'error': "this username is already registered"
+            }), 409
+        elif 'email' in error_message.lower():
+            return jsonify({
+                'message': "email already exists",
+                'status': False,
+                'error': "this email is already registered"
+            }), 409
+        else:
+            return jsonify({
+                'message': "failed to create user",
+                'status': False,
+                'error': error_message
+            }), 409
         
     except Exception as error:
         db.session.rollback()
