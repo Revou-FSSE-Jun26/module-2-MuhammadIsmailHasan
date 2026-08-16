@@ -3,10 +3,9 @@ Seeder untuk testing products dan users endpoint
 Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()"
 """
 
-from app import app, db
-from models.user import User
-from models.product import Product
-from models.category import Category
+from app import app
+from utils import db
+from models import User, Product, Category
 import bcrypt
 from datetime import datetime, timedelta
 
