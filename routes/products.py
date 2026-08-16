@@ -6,6 +6,16 @@ products_bp = Blueprint('products', __name__, url_prefix='/products')
 
 @products_bp.route('/', methods=['GET'])
 def get_products():
+    """Get all products.
+    ---
+    tags:
+      - Products
+    responses:
+      200:
+        description: Products retrieved successfully
+      404:
+        description: Failed to get products
+    """
     try:
         products = Product.query.all()
         return jsonify({
@@ -25,6 +35,34 @@ def get_products():
 
 @products_bp.route('/', methods=['POST'])
 def create_product():
+    """Create a new product.
+    ---
+    tags:
+      - Products
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - name
+            - price
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            price:
+              type: number
+            stock:
+              type: integer
+    responses:
+      201:
+        description: Product created successfully
+      400:
+        description: Invalid input
+    """
     data = request.get_json()
     
     if not data.get('name'):
@@ -80,6 +118,23 @@ def create_product():
 
 @products_bp.route('/<int:product_id>', methods=['GET'])
 def get_product(product_id):
+    """Get a product by ID.
+    ---
+    tags:
+      - Products
+    parameters:
+      - name: product_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Product found
+      404:
+        description: Product not found
+      500:
+        description: Server error
+    """
     try :
         product = Product.query.get(product_id)
         if product :
@@ -102,6 +157,34 @@ def get_product(product_id):
     
 @products_bp.route('/<int:product_id>', methods=['PUT'])
 def update_product(product_id):
+    """Update a product.
+    ---
+    tags:
+      - Products
+    parameters:
+      - name: product_id
+        in: path
+        type: integer
+        required: true
+      - name: body
+        in: body
+        schema:
+          type: object
+          properties:
+            name:
+              type: string
+            price:
+              type: number
+            stock:
+              type: integer
+    responses:
+      200:
+        description: Product updated successfully
+      404:
+        description: Product not found
+      500:
+        description: Server error
+    """
     data = request.get_json()
     
     try:
@@ -152,6 +235,23 @@ def update_product(product_id):
 
 @products_bp.route('/<int:product_id>', methods=['DELETE'])
 def delete_product(product_id):
+    """Delete a product.
+    ---
+    tags:
+      - Products
+    parameters:
+      - name: product_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: Product deleted successfully
+      404:
+        description: Product not found
+      500:
+        description: Server error
+    """
     try:
         product = Product.query.get(product_id)
         

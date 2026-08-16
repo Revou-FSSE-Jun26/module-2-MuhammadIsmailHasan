@@ -8,6 +8,38 @@ user_bp = Blueprint('users', __name__, url_prefix='/users')
 
 @user_bp.route('/register', methods=['POST'])
 def register_user():
+    """Register a new user.
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: body
+        in: body
+        required: true
+        schema:
+          type: object
+          required:
+            - username
+            - email
+            - password
+          properties:
+            username:
+              type: string
+            email:
+              type: string
+            password:
+              type: string
+            role:
+              type: string
+    responses:
+      201:
+        description: User created successfully
+      400:
+        description: Missing required fields
+      409:
+        description: Username or email already exists
+    """
+    
     data = request.get_json()
     
     if 'username' not in data:
@@ -95,7 +127,23 @@ def register_user():
 
 @user_bp.route('/<int:user_id>', methods=['GET'])
 def get_user(user_id):
-    
+    """Get user by ID.
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: User found
+      404:
+        description: User not found
+      500:
+        description: Server error
+    """
     try :
         user = User.query.get(user_id)
         if user :

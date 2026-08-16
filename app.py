@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from flasgger import Flasgger
 from utils import db
 from dotenv import load_dotenv
 from flask_migrate import Migrate
@@ -21,6 +22,25 @@ def init_app():
 
     db.init_app(app)
     migrate = Migrate(app, db)
+    
+    # Configure Flasgger
+    Flasgger(app, config={
+        'headers': [],
+        'specs': [
+            {
+                'endpoint': 'apispec_1',
+                'route': '/apispec_1.json',
+                'rule_filter': lambda rule: True,
+                'model_filter': lambda tag: True,
+            }
+        ],
+        'static_url_path': '/flasgger_static',
+        'swagger_ui': True,
+        'specs_route': '/apidocs/',
+        'title': 'Revoshop API',
+        'version': '1.0.0',
+        'description': 'E-commerce API for learning Flask and SQLAlchemy'
+    })
     
     app.register_blueprint(user_bp)
     app.register_blueprint(products_bp)
