@@ -95,7 +95,6 @@ Copy `.env.example` to `.env` and update the database URL:
 
 ```bash
 DATABASE_URL=postgresql://postgres:password@localhost:5432/revoshop_db
-DATABASE_TRACK_MODIFICATION=False
 ```
 
 ### 4. Initialize Database
@@ -114,7 +113,7 @@ psql -U postgres -d revoshop_db -f seed.sql
 ### Start Development Server
 
 ```bash
-# Default port 5000 (may conflict on macOS)
+# Default port 5000
 python3 run_server.py
 
 # Or use custom port
@@ -122,6 +121,10 @@ python3 run_server.py 5001
 ```
 
 Server runs on: `http://localhost:5001`
+
+### API Documentation (Swagger)
+
+Once the server is running, open `http://localhost:5001/apidocs/` in your browser to explore and test all endpoints interactively via Swagger UI.
 
 ### Seed Test Data
 
@@ -230,7 +233,7 @@ GET /users/1
 **Insomnia Screenshot:**
 ![Get User Success](./images/tests/get%20user%20by%20id%20success.png)
 
-**Test Result:** 😔 Success - User not found
+**Error Case: 🛑 User not found (404):**
 
 **Insomnia Screenshot:**
 ![Get User Failed](./images/tests/get%20user%20by%20id%20failed.png)
@@ -369,7 +372,7 @@ GET /products/1
 **Insomnia Screenshot:**
 ![Get Product by ID Success](./images/tests/get%20products%20by%20id%20success.png)
 
-**Test Result:** 😔 Failed - Product not found
+**Error Case: 🛑 Product not found (404):**
 
 **Insomnia Screenshot:**
 ![Get Product by ID Success](./images/tests/get%20product%20by%20id%20failed.png)
