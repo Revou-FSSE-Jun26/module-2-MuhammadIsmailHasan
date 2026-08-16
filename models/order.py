@@ -3,8 +3,8 @@ from utils import db
 
 order_items = db.Table(
     'order_items',
-    db.Column('order_id', db.Integer, db.ForeignKey('orders.id'), primary_key=True),
-    db.Column('product_id', db.Integer, db.ForeignKey('products.id'), primary_key=True)
+    db.Column('order_id', db.Integer, db.ForeignKey('orders.id', name='fk_order_items_order_id'), primary_key=True),
+    db.Column('product_id', db.Integer, db.ForeignKey('products.id', name='fk_order_items_product_id'), primary_key=True)
 )
 
 class Order(db.Model):
@@ -15,7 +15,7 @@ class Order(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT', name='fk_orders_user_id'), nullable=False, index=True)
     total_amount = db.Column(db.Numeric(14, 2), nullable=False)
     status = db.Column(db.String(25), nullable=False, server_default='waitingForPayment')
     ordered_at = db.Column(db.DateTime, default=datetime.utcnow)

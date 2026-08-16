@@ -8,7 +8,7 @@ class Product(db.Model):
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id', ondelete='SET NULL'), index=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id', ondelete='SET NULL', name='fk_products_category_id'), index=True)
     name = db.Column(db.String(255), nullable=False)
     description = db.Column(db.String(1000))
     price = db.Column(db.Numeric(11, 2), nullable=False)
