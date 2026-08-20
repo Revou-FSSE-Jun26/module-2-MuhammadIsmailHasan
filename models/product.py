@@ -15,6 +15,8 @@ class Product(db.Model):
     stock = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
     def to_dict(self):
         return {
             'id': self.id,

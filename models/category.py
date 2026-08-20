@@ -8,6 +8,8 @@ class Category(db.Model):
     name = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
     products = db.relationship('Product', backref='category', lazy=True)
     
     def to_dict(self):

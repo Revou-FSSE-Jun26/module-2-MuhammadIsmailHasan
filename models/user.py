@@ -13,6 +13,8 @@ class User(db.Model):
     role = db.Column(db.String(50), nullable=False, server_default='user')
     last_login = db.Column(db.DateTime)
     
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
     orders = db.relationship('Order', backref='buyer', lazy=True)
     
     def to_dict(self):

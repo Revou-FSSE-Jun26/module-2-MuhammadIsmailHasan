@@ -20,6 +20,8 @@ class Order(db.Model):
     status = db.Column(db.String(25), nullable=False, server_default='waitingForPayment')
     ordered_at = db.Column(db.DateTime, default=datetime.utcnow)
     
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
     products = db.relationship('Product', secondary=order_items, backref='orders', lazy=True)
     
     def to_dict(self):
