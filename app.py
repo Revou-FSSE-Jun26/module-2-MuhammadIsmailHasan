@@ -1,7 +1,7 @@
 from flask import Flask
 from flasgger import Flasgger
 from flask_migrate import Migrate
-from utils import db
+from helper.utils import db
 from config import SWAGGER_CONFIG
 from models import User, Product, Category, Order
 from routes import register_routes

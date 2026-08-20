@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from models.users import User
-from utils import db
+from helper.utils import db
 from sqlalchemy.exc import IntegrityError
 import bcrypt
 

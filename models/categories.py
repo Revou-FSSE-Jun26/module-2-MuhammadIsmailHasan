@@ -1,5 +1,5 @@
 from datetime import datetime
-from utils import db
+from helper.utils import db
 
 class Category(db.Model):
     __tablename__ = 'categories'

@@ -4,7 +4,7 @@ Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()
 """
 
 from app import app
-from utils import db
+from helper.utils import db
 from models import User, Product, Category
 import bcrypt
 from datetime import datetime, timedelta

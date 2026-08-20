@@ -1,5 +1,5 @@
 from datetime import datetime
-from utils import db
+from helper.utils import db
 
 order_items = db.Table(
     'order_items',
