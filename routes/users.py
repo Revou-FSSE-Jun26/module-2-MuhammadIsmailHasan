@@ -163,3 +163,28 @@ def get_user(user_id):
             'status': False,
             'error': str(error)
         }), 500 
+        
+@user_bp.route('/<int:user_id>', methods=['DELETE'])
+def delete_user(user_id):
+    try:
+        user = User.query.get(user_id)
+        
+        if not user : 
+            return jsonify({
+                    'message': "user not found",
+                    'status': False,
+                }), 404 
+            
+        user.is_active = False
+        db.session.commit()
+        
+        return jsonify({
+                'message': 'success delete user',
+                'status': True,
+            }), 200
+    except Exception as error:
+        return jsonify({
+            'message': "failed to delete user",
+            'status': False,
+            'error': str(error)
+        }), 500

@@ -260,8 +260,8 @@ def delete_product(product_id):
                     'message': "product not found",
                     'status': False,
                 }), 404 
-        
-        db.session.delete(product)
+            
+        product.is_active = False
         db.session.commit()
         
         return jsonify({
