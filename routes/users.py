@@ -166,6 +166,23 @@ def get_user(user_id):
         
 @user_bp.route('/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
+    """Delete (soft-delete) a user by ID.
+    ---
+    tags:
+      - Users
+    parameters:
+      - name: user_id
+        in: path
+        type: integer
+        required: true
+    responses:
+      200:
+        description: User deleted successfully
+      404:
+        description: User not found
+      500:
+        description: Server error
+    """
     try:
         user = User.query.get(user_id)
         
