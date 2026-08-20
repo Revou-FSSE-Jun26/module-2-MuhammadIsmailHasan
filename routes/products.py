@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from models.products import Product
 from helper.utils import db
+from helper.validation import validation_products_data
 
 products_bp = Blueprint('products', __name__, url_prefix='/products')
 
@@ -63,38 +64,26 @@ def create_product():
       400:
         description: Invalid input
     """
-    data = request.get_json()
+    data = request.get_json(silent=True, force=True)
+    if not data:
+      return jsonify({
+        "message" : "body request must be valid JSON format or cannot be empty",
+        "status": False
+      }), 400
+      
+    error_message, error_code = validation_products_data(data)
+    if error_message is not None:
+      return jsonify({
+        "message": error_message,
+        "status": False
+      }), error_code
     
-    if not data.get('name'):
-        return jsonify({
-            'message': "product name is required",
-            'status': False,
-        }), 400
-    
-    if data.get('price') is None:
-        return jsonify({
-            'message': "product price is required",
-            'status': False,
-        }), 400
-    
-    try:
-        price = float(data.get('price'))
-        if price <= 0:
-            return jsonify({
-                'message': "product price must be greater than 0",
-                'status': False,
-            }), 400
-    except (ValueError, TypeError):
-        return jsonify({
-            'message': "product price must be a valid number",
-            'status': False,
-        }), 400
     
     try:
         product = Product(
             name=data.get('name'),
             description=data.get('description'),
-            price=price,
+            price=data.get('price'),
             stock=data.get('stock', 0)
         )
         
