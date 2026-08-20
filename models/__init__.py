@@ -1,6 +1,6 @@
-from models.user import User
-from models.product import Product
-from models.category import Category
-from models.order import Order
+from models.users import User
+from models.products import Product
+from models.categories import Category
+from models.orders import Order
 
 __all__ = ['User', 'Product', 'Category', 'Order']
