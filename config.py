@@ -21,5 +21,8 @@ SWAGGER_CONFIG = {
     'specs_route': '/apidocs/',
     'title': 'Revoshop API',
     'version': '1.0.0',
-    'description': 'E-commerce API for learning Flask and SQLAlchemy'
+    'description': 'E-commerce API for learning Flask and SQLAlchemy',
+    'host': os.getenv('API_HOST', 'localhost:5000'),
+    'basePath': '/',
+    'schemes': ['http', 'https'],
 }
