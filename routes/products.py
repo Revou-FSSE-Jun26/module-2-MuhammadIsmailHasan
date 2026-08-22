@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from models.products import Product
 from helper.utils import db
 from helper.validation import validation_products_data
@@ -36,8 +36,8 @@ def get_products():
         in: query
         type: string
         required: false
-        enum: [name, price, created_at]
-        description: Sort field (default name)
+        enum: [id, name, price, created_at]
+        description: Sort field (default id)
       - name: order
         in: query
         type: string
@@ -98,7 +98,7 @@ def get_products():
                 total_pages:
                   type: integer
                   example: 5
-      404:
+      500:
         description: Failed to get products
         schema:
           type: object
@@ -109,8 +109,6 @@ def get_products():
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
     try:
         query = Product.query.filter_by(is_active=True)
@@ -163,12 +161,12 @@ def get_products():
             }
         }), 200
             
-    except Exception as e:
+    except Exception:
+        current_app.logger.exception('failed to get all products')
         return jsonify({
             'message': 'failed get all products',
-            'status': False,
-            'error': str(e)
-        }), 404
+            'status': False
+        }), 500
     
 
 @products_bp.route('/', methods=['POST'])
@@ -226,24 +224,15 @@ def create_product():
                 id:
                   type: integer
                   example: 1
-                category_id:
-                  type: integer
-                  example: 1
                 name:
                   type: string
                   example: Laptop
-                description:
-                  type: string
-                  example: A powerful laptop
                 price:
                   type: number
                   example: 999.99
                 stock:
                   type: integer
                   example: 50
-                created_at:
-                  type: string
-                  example: "2024-01-01T00:00:00"
       400:
         description: Invalid input or empty body
         schema:
@@ -274,6 +263,17 @@ def create_product():
             message:
               type: string
               example: name cannot exceed 255 characters
+            status:
+              type: boolean
+              example: false
+      500:
+        description: Server error
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: failed to create product
             status:
               type: boolean
               example: false
@@ -311,14 +311,14 @@ def create_product():
           'data' : product.to_dict()
       }), 201
     
-    except Exception as error:
+    except Exception:
         db.session.rollback()
-        
+        current_app.logger.exception('failed to create product')
+
         return jsonify({
             'message': "failed to create product",
-            'status': False,
-            'error': str(error)
-        }), 400    
+            'status': False
+        }), 500    
 
 @products_bp.route('/<int:product_id>', methods=['GET'])
 def get_product(product_id):
@@ -350,24 +350,39 @@ def get_product(product_id):
                 id:
                   type: integer
                   example: 1
-                category_id:
-                  type: integer
-                  example: 2
                 name:
                   type: string
                   example: Laptop
-                description:
-                  type: string
-                  example: A powerful laptop
                 price:
                   type: number
                   example: 999.99
                 stock:
                   type: integer
                   example: 50
+                description:
+                  type: string
+                  example: A powerful laptop
                 created_at:
                   type: string
                   example: "2024-01-01T00:00:00"
+                is_active:
+                  type: boolean
+                  example: true
+                category:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 2
+                    name:
+                      type: string
+                      example: Electronics
+                    created_at:
+                      type: string
+                      example: "2024-01-01T00:00:00"
+                    is_active:
+                      type: boolean
+                      example: true
       404:
         description: Product not found
         schema:
@@ -386,15 +401,13 @@ def get_product(product_id):
           properties:
             message:
               type: string
-              example: failed to create product
+              example: failed to get product
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
     try :
-        product = Product.query.filter_by(id=product_id,is_active=True).first()
+        product = Product.query.filter_by(id=product_id, is_active=True).first()
         if product :
             return jsonify({
                 'message': 'success get product',
@@ -406,11 +419,11 @@ def get_product(product_id):
                 'message': "product not found",
                 'status': False,
             }), 404 
-    except Exception as error :
+    except Exception :
+        current_app.logger.exception('failed to get product %s', product_id)
         return jsonify({
-            'message': "failed to create product",
-            'status': False,
-            'error': str(error)
+            'message': "failed to get product",
+            'status': False
         }), 500    
     
 @products_bp.route('/<int:product_id>', methods=['PUT'])
@@ -469,24 +482,15 @@ def update_product(product_id):
                 id:
                   type: integer
                   example: 1
-                category_id:
-                  type: integer
-                  example: 2
                 name:
                   type: string
                   example: Updated Laptop
-                description:
-                  type: string
-                  example: An updated powerful laptop
                 price:
                   type: number
                   example: 1099.99
                 stock:
                   type: integer
                   example: 100
-                created_at:
-                  type: string
-                  example: "2024-01-01T00:00:00"
       400:
         description: Invalid input or empty body
         schema:
@@ -531,8 +535,6 @@ def update_product(product_id):
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
     product = Product.query.filter_by(id=product_id, is_active=True).first()
         
@@ -557,7 +559,7 @@ def update_product(product_id):
       }), error_code
     
     name = data.get('name')
-    stock = data.get('stock', 0)
+    stock = data.get('stock')
     price = data.get('price')
     description = data.get('description')
     category_id = data.get('category_id')
@@ -577,12 +579,12 @@ def update_product(product_id):
               'data' : product.to_dict()
           }), 200
         
-    except Exception as error :
+    except Exception :
         db.session.rollback()
+        current_app.logger.exception('failed to update product %s', product_id)
         return jsonify({
             'message': "failed to update product",
-            'status': False,
-            'error': str(error)
+            'status': False
         }), 500  
 
 @products_bp.route('/<int:product_id>', methods=['DELETE'])
@@ -631,8 +633,6 @@ def delete_product(product_id):
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
     try:
         product = Product.query.filter_by(id=product_id, is_active=True).first()
@@ -650,9 +650,10 @@ def delete_product(product_id):
                 'message': 'success delete product',
                 'status': True,
             }), 200
-    except Exception as error:
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('failed to delete product %s', product_id)
         return jsonify({
             'message': "failed to delete product",
-            'status': False,
-            'error': str(error)
+            'status': False
         }), 500  

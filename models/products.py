@@ -21,7 +21,7 @@ class Product(db.Model):
         return {
             'id': self.id,
             'name': self.name,
-            'price': self.price,
+            'price': float(self.price) if self.price is not None else None,
             'stock': self.stock,
         }
         

@@ -1,12 +1,12 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from models.users import User
 from helper.utils import db
 from sqlalchemy.exc import IntegrityError
 import bcrypt
 
-user_bp = Blueprint('users', __name__, url_prefix='/users')
+users_bp = Blueprint('users', __name__, url_prefix='/users')
 
-@user_bp.route('/register', methods=['POST'])
+@users_bp.route('/register', methods=['POST'])
 def register_user():
     """Register a new user.
     ---
@@ -29,19 +29,81 @@ def register_user():
               type: string
             password:
               type: string
-            role:
-              type: string
     responses:
       201:
         description: User created successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: user created
+            status:
+              type: boolean
+              example: true
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                username:
+                  type: string
+                  example: johndoe
+                email:
+                  type: string
+                  example: john@example.com
+                role:
+                  type: string
+                  example: buyer
+                last_login:
+                  type: string
+                  example: null
+                created_at:
+                  type: string
+                  example: "2024-01-01T00:00:00"
       400:
-        description: Missing required fields
+        description: Missing required fields or invalid body
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: username is required
+            status:
+              type: boolean
+              example: false
       409:
         description: Username or email already exists
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: username already exists
+            status:
+              type: boolean
+              example: false
+      500:
+        description: Server error
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: failed to create user
+            status:
+              type: boolean
+              example: false
     """
-    
-    data = request.get_json()
-    
+
+    data = request.get_json(silent=True, force=True)
+    if not data:
+        return jsonify({
+            "message": "body request must be valid JSON format or cannot be empty",
+            "status": False
+        }), 400
+
     if 'username' not in data:
         return jsonify({
                 'message': "username is required",
@@ -77,11 +139,17 @@ def register_user():
         }), 409
     
     try:
+        password_hash = bcrypt.hashpw(
+            data["password"].encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
+
+        # role is never taken from the request body, otherwise any caller could
+        # register themselves as an admin. changing a role is an admin-only action.
         new_user = User(
             username=data.get('username'),
             email=data.get('email'),
-            password_hash = bcrypt.hashpw(data["password"].encode("utf-8"), bcrypt.gensalt()),
-            role=data.get('role', 'user')
+            password_hash=password_hash,
+            role='buyer'
         )
         
         db.session.add(new_user)
@@ -95,37 +163,35 @@ def register_user():
         
     except IntegrityError as error:
         db.session.rollback()
-        
-        error_message = str(error)
-        if 'username' in error_message.lower():
+        current_app.logger.warning('integrity error on user registration: %s', error)
+
+        error_message = str(error).lower()
+        if 'username' in error_message:
             return jsonify({
                 'message': "username already exists",
-                'status': False,
-                'error': "this username is already registered"
+                'status': False
             }), 409
-        elif 'email' in error_message.lower():
+        elif 'email' in error_message:
             return jsonify({
                 'message': "email already exists",
-                'status': False,
-                'error': "this email is already registered"
+                'status': False
             }), 409
         else:
             return jsonify({
                 'message': "failed to create user",
-                'status': False,
-                'error': error_message
+                'status': False
             }), 409
-        
-    except Exception as error:
+
+    except Exception:
         db.session.rollback()
-        
+        current_app.logger.exception('failed to create user')
+
         return jsonify({
             'message': "failed to create user",
-            'status': False,
-            'error': str(error)
-        }), 400   
+            'status': False
+        }), 500   
 
-@user_bp.route('/<int:user_id>', methods=['GET'])
+@users_bp.route('/<int:user_id>', methods=['GET'])
 def get_user(user_id):
     """Get user by ID.
     ---
@@ -145,7 +211,7 @@ def get_user(user_id):
         description: Server error
     """
     try :
-        user = User.query.get(user_id)
+        user = User.query.filter_by(id=user_id, is_active=True).first()
         if user :
             return jsonify({
                 'message': 'success get user data',
@@ -157,14 +223,14 @@ def get_user(user_id):
                 'message': "user data not found",
                 'status': False,
             }), 404 
-    except Exception as error :
+    except Exception :
+        current_app.logger.exception('failed to get user %s', user_id)
         return jsonify({
             'message': "failed to get user data",
-            'status': False,
-            'error': str(error)
+            'status': False
         }), 500 
         
-@user_bp.route('/<int:user_id>', methods=['DELETE'])
+@users_bp.route('/<int:user_id>', methods=['DELETE'])
 def delete_user(user_id):
     """Delete (soft-delete) a user by ID.
     ---
@@ -184,7 +250,7 @@ def delete_user(user_id):
         description: Server error
     """
     try:
-        user = User.query.get(user_id)
+        user = User.query.filter_by(id=user_id, is_active=True).first()
         
         if not user : 
             return jsonify({
@@ -199,9 +265,10 @@ def delete_user(user_id):
                 'message': 'success delete user',
                 'status': True,
             }), 200
-    except Exception as error:
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('failed to delete user %s', user_id)
         return jsonify({
             'message': "failed to delete user",
-            'status': False,
-            'error': str(error)
+            'status': False
         }), 500
