@@ -38,7 +38,7 @@ def validation_products_data(data, required_all=True):
         if price > 10**11:
             return "price cannot exceed 11 digits number", 422
         if price < 0:
-            return "price must be greater than 0", 422
+            return "price cannot be negative", 422
         
     if required_all and stock is None:
         return "stock is required", 400

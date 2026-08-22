@@ -4,7 +4,7 @@ from helper.utils import db
 class Product(db.Model):
     __tablename__ = 'products'
     __table_args__ = (
-        db.CheckConstraint('price > 0::numeric'),
+        db.CheckConstraint('price >= 0', name='ck_products_price_non_negative'),
     )
 
     id = db.Column(db.Integer, primary_key=True)

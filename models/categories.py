@@ -3,6 +3,9 @@ from helper.utils import db
 
 class Category(db.Model):
     __tablename__ = 'categories'
+    __table_args__ = (
+        db.UniqueConstraint('name', name='uq_categories_name'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
