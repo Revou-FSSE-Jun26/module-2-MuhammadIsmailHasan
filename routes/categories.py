@@ -1,44 +1,23 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, current_app
 from models.categories import Category
 from helper.utils import db
-from helper.validation import validation_categories_data
+from helper.validation import validation_category_data
 
-category_bp = Blueprint('categories', __name__, url_prefix='/categories')
+categories_bp = Blueprint('categories', __name__)
 
-@category_bp.route('/', methods=['GET'])
+
+@categories_bp.route('/', methods=['GET'])
 def get_categories():
     """Get all categories.
     ---
     tags:
       - Categories
     parameters:
-      - name: name
+      - name: with_products
         in: query
-        type: string
+        type: boolean
         required: false
-        description: Filter by category name (partial match)
-      - name: sort_by
-        in: query
-        type: string
-        required: false
-        enum: [id, name, created_at]
-        description: Sort field (default id)
-      - name: order
-        in: query
-        type: string
-        required: false
-        enum: [asc, desc]
-        description: Sort direction (default asc)
-      - name: page
-        in: query
-        type: integer
-        required: false
-        description: Page number (default 1)
-      - name: limit
-        in: query
-        type: integer
-        required: false
-        description: Items per page (default 10)
+        description: Include the products belonging to each category
     responses:
       200:
         description: Categories retrieved successfully
@@ -68,22 +47,7 @@ def get_categories():
                   is_active:
                     type: boolean
                     example: true
-            pagination:
-              type: object
-              properties:
-                page:
-                  type: integer
-                  example: 1
-                limit:
-                  type: integer
-                  example: 10
-                total_items:
-                  type: integer
-                  example: 20
-                total_pages:
-                  type: integer
-                  example: 2
-      404:
+      500:
         description: Failed to get categories
         schema:
           type: object
@@ -94,57 +58,31 @@ def get_categories():
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
     try:
-        query = Category.query.filter_by(is_active=True)
-        
-        name = request.args.get('name')
-        if name:
-            query = query.filter(Category.name.ilike(f'%{name}%'))
-        
-        sort_by = request.args.get('sort_by', 'id')
-        order = request.args.get('order', 'asc')
-        
-        sort_columns = {
-            'id': Category.id,
-            'name': Category.name,
-            'created_at': Category.created_at
-        }
-        sort_column = sort_columns.get(sort_by, Category.name)
-        
-        if order == 'desc':
-            query = query.order_by(sort_column.desc())
+        with_products = request.args.get('with_products', 'false').lower() == 'true'
+        categories = Category.query.filter_by(is_active=True).all()
+
+        if with_products:
+            data = [category.to_dict_with_products() for category in categories]
         else:
-            query = query.order_by(sort_column.asc())
-        
-        page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 10, type=int)
-        
-        paginated = query.paginate(page=page, per_page=limit, error_out=False)
-        
+            data = [category.to_dict() for category in categories]
+
         return jsonify({
             'message': 'get all categories success',
             'status': True,
-            'data': [category.to_dict() for category in paginated.items],
-            'pagination': {
-                'page': paginated.page,
-                'limit': paginated.per_page,
-                'total_items': paginated.total,
-                'total_pages': paginated.pages
-            }
+            'data': data
         }), 200
-            
-    except Exception as e:
+
+    except Exception:
+        current_app.logger.exception('failed to get all categories')
         return jsonify({
             'message': 'failed get all categories',
-            'status': False,
-            'error': str(e)
-        }), 404
-    
+            'status': False
+        }), 500
 
-@category_bp.route('/', methods=['POST'])
+
+@categories_bp.route('/', methods=['POST'])
 def create_category():
     """Create a new category.
     ---
@@ -197,12 +135,23 @@ def create_category():
           properties:
             message:
               type: string
-              example: body request must be valid JSON format or cannot be empty
+              example: name is required
+            status:
+              type: boolean
+              example: false
+      409:
+        description: Category name already exists
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: category name already exists
             status:
               type: boolean
               example: false
       422:
-        description: Validation error
+        description: Validation error (exceeds limits)
         schema:
           type: object
           properties:
@@ -212,46 +161,63 @@ def create_category():
             status:
               type: boolean
               example: false
+      500:
+        description: Server error
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: failed to create category
+            status:
+              type: boolean
+              example: false
     """
     data = request.get_json(silent=True, force=True)
     if not data:
-      return jsonify({
-        "message" : "body request must be valid JSON format or cannot be empty",
-        "status": False
-      }), 400
-      
-    error_message, error_code = validation_categories_data(data)
-    if error_message is not None:
-      return jsonify({
-        "message": error_message,
-        "status": False
-      }), error_code
-    
-    
-    try:
-      category = Category(
-          name=data.get('name').strip()
-      )
-      
-      db.session.add(category)
-      db.session.commit()
-      
-      return jsonify({
-          'message': 'category created',
-          'status': True,
-          'data' : category.to_dict_detail()
-      }), 201
-    
-    except Exception as error:
-        db.session.rollback()
-        
         return jsonify({
-            'message': "failed to create category",
-            'status': False,
-            'error': str(error)
-        }), 400    
+            'message': 'body request must be valid JSON format or cannot be empty',
+            'status': False
+        }), 400
 
-@category_bp.route('/<int:category_id>', methods=['GET'])
+    error_message, error_code = validation_category_data(data)
+    if error_message is not None:
+        return jsonify({
+            'message': error_message,
+            'status': False
+        }), error_code
+
+    name = data.get('name').strip()
+
+    existing = Category.query.filter_by(name=name, is_active=True).first()
+    if existing:
+        return jsonify({
+            'message': 'category name already exists',
+            'status': False
+        }), 409
+
+    try:
+        category = Category(name=name)
+
+        db.session.add(category)
+        db.session.commit()
+
+        return jsonify({
+            'message': 'category created',
+            'status': True,
+            'data': category.to_dict()
+        }), 201
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('failed to create category')
+        return jsonify({
+            'message': 'failed to create category',
+            'status': False
+        }), 500
+
+
+@categories_bp.route('/<int:category_id>', methods=['GET'])
 def get_category(category_id):
     """Get a category by ID.
     ---
@@ -263,6 +229,11 @@ def get_category(category_id):
         type: integer
         required: true
         description: The ID of the category to retrieve
+      - name: with_products
+        in: query
+        type: boolean
+        required: false
+        description: Include the products belonging to this category
     responses:
       200:
         description: Category found
@@ -290,23 +261,6 @@ def get_category(category_id):
                 is_active:
                   type: boolean
                   example: true
-                products:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      id:
-                        type: integer
-                        example: 1
-                      name:
-                        type: string
-                        example: Laptop
-                      price:
-                        type: number
-                        example: 999.99
-                      stock:
-                        type: integer
-                        example: 50
       404:
         description: Category not found
         schema:
@@ -329,30 +283,34 @@ def get_category(category_id):
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
-    try :
-        category = Category.query.filter_by(id=category_id,is_active=True).first()
-        if category :
+    try:
+        category = Category.query.filter_by(id=category_id, is_active=True).first()
+
+        if not category:
             return jsonify({
-                'message': 'success get category',
-                'status': True,
-                'data' : category.to_dict_with_products()
-            }), 200
-        else :
-            return jsonify({
-                'message': "category not found",
-                'status': False,
-            }), 404 
-    except Exception as error :
+                'message': 'category not found',
+                'status': False
+            }), 404
+
+        with_products = request.args.get('with_products', 'false').lower() == 'true'
+        data = category.to_dict_with_products() if with_products else category.to_dict()
+
         return jsonify({
-            'message': "failed to get category",
-            'status': False,
-            'error': str(error)
-        }), 500    
-    
-@category_bp.route('/<int:category_id>', methods=['PUT'])
+            'message': 'success get category',
+            'status': True,
+            'data': data
+        }), 200
+
+    except Exception:
+        current_app.logger.exception('failed to get category %s', category_id)
+        return jsonify({
+            'message': 'failed to get category',
+            'status': False
+        }), 500
+
+
+@categories_bp.route('/<int:category_id>', methods=['PUT'])
 def update_category(category_id):
     """Update a category.
     ---
@@ -423,8 +381,19 @@ def update_category(category_id):
             status:
               type: boolean
               example: false
+      409:
+        description: Category name already exists
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: category name already exists
+            status:
+              type: boolean
+              example: false
       422:
-        description: Validation error
+        description: Validation error (exceeds limits)
         schema:
           type: object
           properties:
@@ -445,53 +414,64 @@ def update_category(category_id):
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
     category = Category.query.filter_by(id=category_id, is_active=True).first()
-        
-    if not category :
-      return jsonify({
-          'message': "category not found",
-          'status': False,
-      }), 404 
-          
+
+    if not category:
+        return jsonify({
+            'message': 'category not found',
+            'status': False
+        }), 404
+
     data = request.get_json(silent=True, force=True)
     if not data:
-      return jsonify({
-        "message" : "body request must be valid JSON format or cannot be empty",
-        "status": False
-      }), 400
-      
-    error_message, error_code = validation_categories_data(data, False)
-    if error_message is not None:
-      return jsonify({
-        "message": error_message,
-        "status": False
-      }), error_code
-    
-    name = data.get('name')
-    
-    if name is not None : category.name = name.strip()
-    
-    try:  
-      db.session.commit()
-      
-      return jsonify({
-              'message': 'success update category',
-              'status': True,
-              'data' : category.to_dict_detail()
-          }), 200
-        
-    except Exception as error :
-        db.session.rollback()
         return jsonify({
-            'message': "failed to update category",
-            'status': False,
-            'error': str(error)
-        }), 500  
+            'message': 'body request must be valid JSON format or cannot be empty',
+            'status': False
+        }), 400
 
-@category_bp.route('/<int:category_id>', methods=['DELETE'])
+    error_message, error_code = validation_category_data(data, False)
+    if error_message is not None:
+        return jsonify({
+            'message': error_message,
+            'status': False
+        }), error_code
+
+    name = data.get('name')
+
+    if name is not None:
+        name = name.strip()
+        duplicate = Category.query.filter(
+            Category.name == name,
+            Category.id != category_id,
+            Category.is_active.is_(True)
+        ).first()
+        if duplicate:
+            return jsonify({
+                'message': 'category name already exists',
+                'status': False
+            }), 409
+        category.name = name
+
+    try:
+        db.session.commit()
+
+        return jsonify({
+            'message': 'success update category',
+            'status': True,
+            'data': category.to_dict()
+        }), 200
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('failed to update category %s', category_id)
+        return jsonify({
+            'message': 'failed to update category',
+            'status': False
+        }), 500
+
+
+@categories_bp.route('/<int:category_id>', methods=['DELETE'])
 def delete_category(category_id):
     """Delete a category (soft-delete).
     ---
@@ -537,28 +517,28 @@ def delete_category(category_id):
             status:
               type: boolean
               example: false
-            error:
-              type: string
     """
     try:
         category = Category.query.filter_by(id=category_id, is_active=True).first()
-        
-        if not category : 
+
+        if not category:
             return jsonify({
-                    'message': "category not found",
-                    'status': False,
-                }), 404 
-            
+                'message': 'category not found',
+                'status': False
+            }), 404
+
         category.is_active = False
         db.session.commit()
-        
+
         return jsonify({
-                'message': 'success delete category',
-                'status': True,
-            }), 200
-    except Exception as error:
+            'message': 'success delete category',
+            'status': True
+        }), 200
+
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('failed to delete category %s', category_id)
         return jsonify({
-            'message': "failed to delete category",
-            'status': False,
-            'error': str(error)
+            'message': 'failed to delete category',
+            'status': False
         }), 500

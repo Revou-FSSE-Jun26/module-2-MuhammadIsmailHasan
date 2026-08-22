@@ -1,5 +1,20 @@
 from models import Category
 
+
+def validation_category_data(data, required_all=True):
+    name = data.get('name')
+
+    if required_all and name is None:
+        return "name is required", 400
+    if name is not None:
+        if not isinstance(name, str) or not name.strip():
+            return "name cannot be empty", 400
+        if len(name) > 255:
+            return "name cannot exceed 255 characters", 422
+
+    return None, None
+
+
 def validation_products_data(data, required_all=True):
     name = data.get('name')
     price = data.get('price')
@@ -36,22 +51,11 @@ def validation_products_data(data, required_all=True):
             return "description cannot exceed 1000 characters", 422
     
     if category_id is not None:
-        category = Category.query.get(category_id)
+        if not isinstance(category_id, int) or isinstance(category_id, bool):
+            return "category_id must be a number", 400
+        category = Category.query.filter_by(id=category_id, is_active=True).first()
         if category is None:
             return "category id not found", 404
-        
-    return None, None
-
-def validation_categories_data(data, required_all=True):
-    name = data.get('name')
-    
-    if required_all and name is None:
-        return "name is required", 400
-    if name is not None:
-        if not isinstance(name, str) or not name.strip():
-            return "name cannot be empty", 400
-        if len(name) > 255:
-            return "name cannot exceed 255 characters", 422
         
     return None, None
     
