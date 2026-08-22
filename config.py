@@ -23,6 +23,6 @@ SWAGGER_CONFIG = {
     'version': '1.0.0',
     'description': 'E-commerce API v1 for learning Flask and SQLAlchemy',
     'host': os.getenv('API_HOST', 'localhost:5000'),
-    'basePath': '/api/v1',
+    'basePath': '/',
     'schemes': ['http', 'https'],
 }
