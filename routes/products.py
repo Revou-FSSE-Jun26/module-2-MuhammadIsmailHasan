@@ -11,6 +11,49 @@ def get_products():
     ---
     tags:
       - Products
+    parameters:
+      - name: name
+        in: query
+        type: string
+        required: false
+        description: Filter by product name (partial match)
+      - name: category_id
+        in: query
+        type: integer
+        required: false
+        description: Filter by category ID
+      - name: min_price
+        in: query
+        type: number
+        required: false
+        description: Minimum price filter
+      - name: max_price
+        in: query
+        type: number
+        required: false
+        description: Maximum price filter
+      - name: sort_by
+        in: query
+        type: string
+        required: false
+        enum: [name, price, created_at]
+        description: Sort field (default name)
+      - name: order
+        in: query
+        type: string
+        required: false
+        enum: [asc, desc]
+        description: Sort direction (default asc)
+      - name: page
+        in: query
+        type: integer
+        required: false
+        description: Page number (default 1)
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        description: Items per page (default 10)
     responses:
       200:
         description: Products retrieved successfully
@@ -31,24 +74,30 @@ def get_products():
                   id:
                     type: integer
                     example: 1
-                  category_id:
-                    type: integer
-                    example: 2
                   name:
                     type: string
                     example: Laptop
-                  description:
-                    type: string
-                    example: A powerful laptop
                   price:
                     type: number
                     example: 999.99
                   stock:
                     type: integer
                     example: 50
-                  created_at:
-                    type: string
-                    example: "2024-01-01T00:00:00"
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                  example: 1
+                limit:
+                  type: integer
+                  example: 10
+                total_items:
+                  type: integer
+                  example: 50
+                total_pages:
+                  type: integer
+                  example: 5
       404:
         description: Failed to get products
         schema:
@@ -64,12 +113,54 @@ def get_products():
               type: string
     """
     try:
-        products = Product.query.filter_by(is_active=True)
+        query = Product.query.filter_by(is_active=True)
+        
+        name = request.args.get('name')
+        if name:
+            query = query.filter(Product.name.ilike(f'%{name}%'))
+        
+        category_id = request.args.get('category_id', type=int)
+        if category_id:
+            query = query.filter_by(category_id=category_id)
+        
+        min_price = request.args.get('min_price', type=float)
+        max_price = request.args.get('max_price', type=float)
+        if min_price is not None:
+            query = query.filter(Product.price >= min_price)
+        if max_price is not None:
+            query = query.filter(Product.price <= max_price)
+        
+        sort_by = request.args.get('sort_by', 'id')
+        order = request.args.get('order', 'asc')
+        
+        sort_columns = {
+            'id': Product.id,
+            'name': Product.name,
+            'price': Product.price,
+            'created_at': Product.created_at
+        }
+        sort_column = sort_columns.get(sort_by, Product.name)
+        
+        if order == 'desc':
+            query = query.order_by(sort_column.desc())
+        else:
+            query = query.order_by(sort_column.asc())
+        
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        
+        paginated = query.paginate(page=page, per_page=limit, error_out=False)
+        
         return jsonify({
             'message': 'get all products success',
             'status': True,
-            'data': 
-                [product.to_dict() for product in products]
+            'data': [product.to_dict() for product in paginated.items],
+            'pagination': {
+                'page': paginated.page,
+                'limit': paginated.per_page,
+                'total_items': paginated.total,
+                'total_pages': paginated.pages
+            }
         }), 200
             
     except Exception as e:
@@ -308,7 +399,7 @@ def get_product(product_id):
             return jsonify({
                 'message': 'success get product',
                 'status': True,
-                'data' : product.to_dict()
+                'data' : product.to_dict_detail()
             }), 200
         else :
             return jsonify({

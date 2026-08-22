@@ -20,11 +20,16 @@ class Product(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
-            'category_id': self.category_id,
             'name': self.name,
-            'description': self.description,
             'price': self.price,
             'stock': self.stock,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'is_active': self.is_active
         }
+        
+    def to_dict_detail(self):
+        result = self.to_dict()
+        result['description'] = self.description
+        result['created_at'] = self.created_at.isoformat() if self.created_at else None
+        result['is_active'] = self.is_active
+        result['category'] = self.category.to_dict() if self.category else None
+        
+        return result
