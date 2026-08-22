@@ -41,4 +41,17 @@ def validation_products_data(data, required_all=True):
             return "category id not found", 404
         
     return None, None
+
+def validation_categories_data(data, required_all=True):
+    name = data.get('name')
+    
+    if required_all and name is None:
+        return "name is required", 400
+    if name is not None:
+        if not isinstance(name, str) or not name.strip():
+            return "name cannot be empty", 400
+        if len(name) > 255:
+            return "name cannot exceed 255 characters", 422
+        
+    return None, None
     
