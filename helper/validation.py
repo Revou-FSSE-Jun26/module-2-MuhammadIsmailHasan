@@ -1,10 +1,11 @@
-from models import User, Product, Category, Order
+from models import Category
 
 def validation_products_data(data, required_all=True):
     name = data.get('name')
     price = data.get('price')
     stock = data.get('stock')
     description = data.get('description')
+    category_id = data.get('category_id')
     
     if required_all and name is None:
         return "name is required", 400
@@ -33,6 +34,11 @@ def validation_products_data(data, required_all=True):
     if description is not None:
         if len(description) > 1000:
             return "description cannot exceed 1000 characters", 422
+    
+    if category_id is not None:
+        category = Category.query.get(category_id)
+        if category is None:
+            return "category id not found", 404
         
     return None, None
     
