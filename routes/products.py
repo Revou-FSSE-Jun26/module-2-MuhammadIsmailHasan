@@ -14,8 +14,54 @@ def get_products():
     responses:
       200:
         description: Products retrieved successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: get all products success
+            status:
+              type: boolean
+              example: true
+            data:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  category_id:
+                    type: integer
+                    example: 2
+                  name:
+                    type: string
+                    example: Laptop
+                  description:
+                    type: string
+                    example: A powerful laptop
+                  price:
+                    type: number
+                    example: 999.99
+                  stock:
+                    type: integer
+                    example: 50
+                  created_at:
+                    type: string
+                    example: "2024-01-01T00:00:00"
       404:
         description: Failed to get products
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: failed get all products
+            status:
+              type: boolean
+              example: false
+            error:
+              type: string
     """
     try:
         products = Product.query.all()
@@ -49,20 +95,97 @@ def create_product():
           required:
             - name
             - price
+            - stock
           properties:
             name:
               type: string
+              example: Laptop
+              description: Product name (max 255 characters)
             description:
               type: string
+              example: A powerful laptop
+              description: Product description (max 1000 characters)
             price:
               type: number
+              example: 999.99
+              description: Product price (must be greater than 0, max 11 digits)
             stock:
               type: integer
+              example: 50
+              description: Product stock quantity
+            category_id:
+              type: integer
+              example: 1
+              description: Category ID (must reference an existing category)
     responses:
       201:
         description: Product created successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: product created
+            status:
+              type: boolean
+              example: true
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                category_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: Laptop
+                description:
+                  type: string
+                  example: A powerful laptop
+                price:
+                  type: number
+                  example: 999.99
+                stock:
+                  type: integer
+                  example: 50
+                created_at:
+                  type: string
+                  example: "2024-01-01T00:00:00"
       400:
-        description: Invalid input
+        description: Invalid input or empty body
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: name is required
+            status:
+              type: boolean
+              example: false
+      404:
+        description: Category not found
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: category id not found
+            status:
+              type: boolean
+              example: false
+      422:
+        description: Validation error (exceeds limits)
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: name cannot exceed 255 characters
+            status:
+              type: boolean
+              example: false
     """
     data = request.get_json(silent=True, force=True)
     if not data:
@@ -117,13 +240,67 @@ def get_product(product_id):
         in: path
         type: integer
         required: true
+        description: The ID of the product to retrieve
     responses:
       200:
         description: Product found
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: success get product
+            status:
+              type: boolean
+              example: true
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                category_id:
+                  type: integer
+                  example: 2
+                name:
+                  type: string
+                  example: Laptop
+                description:
+                  type: string
+                  example: A powerful laptop
+                price:
+                  type: number
+                  example: 999.99
+                stock:
+                  type: integer
+                  example: 50
+                created_at:
+                  type: string
+                  example: "2024-01-01T00:00:00"
       404:
         description: Product not found
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: product not found
+            status:
+              type: boolean
+              example: false
       500:
         description: Server error
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: failed to create product
+            status:
+              type: boolean
+              example: false
+            error:
+              type: string
     """
     try :
         product = Product.query.get(product_id)
@@ -156,24 +333,115 @@ def update_product(product_id):
         in: path
         type: integer
         required: true
+        description: The ID of the product to update
       - name: body
         in: body
+        required: true
         schema:
           type: object
           properties:
             name:
               type: string
+              example: Updated Laptop
+              description: Product name (max 255 characters)
+            description:
+              type: string
+              example: An updated powerful laptop
+              description: Product description (max 1000 characters)
             price:
               type: number
+              example: 1099.99
+              description: Product price (must be greater than 0, max 11 digits)
             stock:
               type: integer
+              example: 100
+              description: Product stock quantity
+            category_id:
+              type: integer
+              example: 2
+              description: Category ID (must reference an existing category)
     responses:
       200:
         description: Product updated successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: success update product
+            status:
+              type: boolean
+              example: true
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                category_id:
+                  type: integer
+                  example: 2
+                name:
+                  type: string
+                  example: Updated Laptop
+                description:
+                  type: string
+                  example: An updated powerful laptop
+                price:
+                  type: number
+                  example: 1099.99
+                stock:
+                  type: integer
+                  example: 100
+                created_at:
+                  type: string
+                  example: "2024-01-01T00:00:00"
+      400:
+        description: Invalid input or empty body
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: body request must be valid JSON format or cannot be empty
+            status:
+              type: boolean
+              example: false
       404:
-        description: Product not found
+        description: Product or category not found
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: Product not found
+            status:
+              type: boolean
+              example: false
+      422:
+        description: Validation error (exceeds limits)
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: price cannot exceed 11 digits number
+            status:
+              type: boolean
+              example: false
       500:
         description: Server error
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: failed to update product
+            status:
+              type: boolean
+              example: false
+            error:
+              type: string
     """
     product = Product.query.get(product_id)
         
@@ -228,7 +496,7 @@ def update_product(product_id):
 
 @products_bp.route('/<int:product_id>', methods=['DELETE'])
 def delete_product(product_id):
-    """Delete a product.
+    """Delete a product (soft-delete).
     ---
     tags:
       - Products
@@ -237,13 +505,43 @@ def delete_product(product_id):
         in: path
         type: integer
         required: true
+        description: The ID of the product to delete
     responses:
       200:
         description: Product deleted successfully
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: success delete product
+            status:
+              type: boolean
+              example: true
       404:
         description: Product not found
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: product not found
+            status:
+              type: boolean
+              example: false
       500:
         description: Server error
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: failed to delete product
+            status:
+              type: boolean
+              example: false
+            error:
+              type: string
     """
     try:
         product = Product.query.get(product_id)
