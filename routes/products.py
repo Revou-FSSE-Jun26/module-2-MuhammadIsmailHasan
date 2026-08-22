@@ -80,21 +80,22 @@ def create_product():
     
     
     try:
-        product = Product(
-            name=data.get('name'),
-            description=data.get('description'),
-            price=data.get('price'),
-            stock=data.get('stock', 0)
-        )
-        
-        db.session.add(product)
-        db.session.commit()
-        
-        return jsonify({
-            'message': 'product created',
-            'status': True,
-            'data' : product.to_dict()
-        }), 201
+      product = Product(
+          name=data.get('name').strip(),
+          description=data.get('description'),
+          price=data.get('price'),
+          stock=data.get('stock', 0),
+          category_id=data.get('category_id')
+      )
+      
+      db.session.add(product)
+      db.session.commit()
+      
+      return jsonify({
+          'message': 'product created',
+          'status': True,
+          'data' : product.to_dict()
+      }), 201
     
     except Exception as error:
         db.session.rollback()
@@ -174,45 +175,48 @@ def update_product(product_id):
       500:
         description: Server error
     """
-    data = request.get_json()
+    product = Product.query.get(product_id)
+        
+    if not product :
+      return jsonify({
+          'message': "Product not found",
+          'status': False,
+      }), 404 
+          
+    data = request.get_json(silent=True, force=True)
+    if not data:
+      return jsonify({
+        "message" : "body request must be valid JSON format or cannot be empty",
+        "status": False
+      }), 400
+      
+    error_message, error_code = validation_products_data(data, False)
+    if error_message is not None:
+      return jsonify({
+        "message": error_message,
+        "status": False
+      }), error_code
     
-    try:
-        product = Product.query.get(product_id)
-        
-        if not product :
-            return jsonify({
-                'message': "Product not found",
-                'status': False,
-            }), 404 
-
-        # Validate price if provided
-        if 'price' in data:
-            try:
-                price = float(data['price'])
-                if price <= 0:
-                    return jsonify({
-                        'message': "product price must be greater than 0",
-                        'status': False,
-                    }), 400
-                product.price = price
-            except (ValueError, TypeError):
-                return jsonify({
-                    'message': "product price must be a valid number",
-                    'status': False,
-                }), 400
-            
-        if 'name' in data :
-            product.name = data['name']
-        if 'stock' in data :
-            product.stock = data['stock']
-        
-        db.session.commit()
-        
-        return jsonify({
-                'message': 'success update product',
-                'status': True,
-                'data' : product.to_dict()
-            }), 200
+    name = data.get('name')
+    stock = data.get('stock', 0)
+    price = data.get('price')
+    description = data.get('description')
+    category_id = data.get('category_id')
+    
+    if name is not None : product.name = name.strip()
+    if stock is not None : product.stock = stock
+    if price is not None : product.price = price
+    if description is not None : product.description = description
+    if category_id is not None : product.category_id = category_id
+    
+    try:  
+      db.session.commit()
+      
+      return jsonify({
+              'message': 'success update product',
+              'status': True,
+              'data' : product.to_dict()
+          }), 200
         
     except Exception as error :
         db.session.rollback()
