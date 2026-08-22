@@ -64,7 +64,7 @@ def get_products():
               type: string
     """
     try:
-        products = Product.query.all()
+        products = Product.query.filter_by(is_active=True)
         return jsonify({
             'message': 'get all products success',
             'status': True,
@@ -303,7 +303,7 @@ def get_product(product_id):
               type: string
     """
     try :
-        product = Product.query.get(product_id)
+        product = Product.query.filter_by(id=product_id,is_active=True).first()
         if product :
             return jsonify({
                 'message': 'success get product',
@@ -443,7 +443,7 @@ def update_product(product_id):
             error:
               type: string
     """
-    product = Product.query.get(product_id)
+    product = Product.query.filter_by(id=product_id, is_active=True).first()
         
     if not product :
       return jsonify({
@@ -544,7 +544,7 @@ def delete_product(product_id):
               type: string
     """
     try:
-        product = Product.query.get(product_id)
+        product = Product.query.filter_by(id=product_id, is_active=True).first()
         
         if not product : 
             return jsonify({
