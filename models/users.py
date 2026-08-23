@@ -23,12 +23,17 @@ class User(db.Model):
     
     orders = db.relationship('Order', backref='buyer', lazy=True)
     
-    def to_dict(self):
+    def to_dict_public(self):
         return {
-            'id': self.id,
             'username': self.username,
-            'email': self.email,
-            'role': self.role,
-            'last_login': self.last_login.isoformat() if self.last_login else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'email': self.email
         }
+        
+    def to_dict(self):
+        result = self.to_dict_public()
+        result['id'] = self.id
+        result['role'] = self.role
+        result['last_login'] = self.last_login.isoformat() if self.last_login else None
+        result['created_at'] = self.created_at.isoformat() if self.created_at else None
+        
+        return result

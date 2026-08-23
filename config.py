@@ -30,4 +30,12 @@ SWAGGER_CONFIG = {
     'host': os.getenv('API_HOST', 'localhost:5000'),
     'basePath': '/',
     'schemes': ['http', 'https'],
+    'securityDefinitions': {
+        'Bearer': {
+            'type': 'apiKey',
+            'name': 'Authorization',
+            'in': 'header',
+            'description': 'JWT token. Format: Bearer <access_token>'
+        }
+    },
 }
