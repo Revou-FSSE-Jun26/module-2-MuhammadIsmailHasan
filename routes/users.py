@@ -8,7 +8,7 @@ import bcrypt
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
-@users_bp.route('/register', methods=['POST'])
+@users_bp.route('/', methods=['POST'])
 def register_user():
     """Register a new user.
     ---
