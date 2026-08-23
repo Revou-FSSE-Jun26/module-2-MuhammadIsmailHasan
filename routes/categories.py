@@ -2,11 +2,13 @@ from flask import Blueprint, jsonify, request, current_app
 from models.categories import Category
 from helper.utils import db
 from helper.validation import validation_category_data
+from helper.auth import roles_required
 
 categories_bp = Blueprint('categories', __name__)
 
 
 @categories_bp.route('/', methods=['GET'])
+@roles_required('seller', 'buyer', 'admin')
 def get_categories():
     """Get all categories.
     ---
@@ -83,6 +85,7 @@ def get_categories():
 
 
 @categories_bp.route('/', methods=['POST'])
+@roles_required('seller', 'admin')
 def create_category():
     """Create a new category.
     ---
@@ -218,6 +221,7 @@ def create_category():
 
 
 @categories_bp.route('/<int:category_id>', methods=['GET'])
+@roles_required('seller', 'buyer', 'admin')
 def get_category(category_id):
     """Get a category by ID.
     ---
@@ -311,6 +315,7 @@ def get_category(category_id):
 
 
 @categories_bp.route('/<int:category_id>', methods=['PUT'])
+@roles_required('seller', 'admin')
 def update_category(category_id):
     """Update a category.
     ---
@@ -472,6 +477,7 @@ def update_category(category_id):
 
 
 @categories_bp.route('/<int:category_id>', methods=['DELETE'])
+@roles_required('seller', 'admin')
 def delete_category(category_id):
     """Delete a category (soft-delete).
     ---

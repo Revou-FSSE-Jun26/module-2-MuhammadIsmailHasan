@@ -172,6 +172,7 @@ def get_products():
     
 
 @products_bp.route('/', methods=['POST'])
+@roles_required('seller', 'admin')
 def create_product():
     """Create a new product.
     ---
@@ -323,6 +324,7 @@ def create_product():
         }), 500    
 
 @products_bp.route('/<int:product_id>', methods=['GET'])
+@roles_required('seller', 'buyer', 'admin')
 def get_product(product_id):
     """Get a product by ID.
     ---
@@ -429,6 +431,7 @@ def get_product(product_id):
         }), 500    
     
 @products_bp.route('/<int:product_id>', methods=['PUT'])
+@roles_required('seller', 'admin')
 def update_product(product_id):
     """Update a product.
     ---
@@ -590,6 +593,7 @@ def update_product(product_id):
         }), 500  
 
 @products_bp.route('/<int:product_id>', methods=['DELETE'])
+@roles_required('seller', 'admin')
 def delete_product(product_id):
     """Delete a product (soft-delete).
     ---
