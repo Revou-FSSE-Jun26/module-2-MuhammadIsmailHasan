@@ -14,6 +14,8 @@ def get_categories():
     ---
     tags:
       - Categories
+    security:
+      - Bearer: []
     parameters:
       - name: with_products
         in: query
@@ -91,6 +93,8 @@ def create_category():
     ---
     tags:
       - Categories
+    security:
+      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -227,6 +231,8 @@ def get_category(category_id):
     ---
     tags:
       - Categories
+    security:
+      - Bearer: []
     parameters:
       - name: category_id
         in: path
@@ -321,6 +327,8 @@ def update_category(category_id):
     ---
     tags:
       - Categories
+    security:
+      - Bearer: []
     parameters:
       - name: category_id
         in: path
@@ -483,6 +491,8 @@ def delete_category(category_id):
     ---
     tags:
       - Categories
+    security:
+      - Bearer: []
     parameters:
       - name: category_id
         in: path

@@ -13,6 +13,8 @@ def get_products():
     ---
     tags:
       - Products
+    security:
+      - Bearer: []
     parameters:
       - name: name
         in: query
@@ -178,6 +180,8 @@ def create_product():
     ---
     tags:
       - Products
+    security:
+      - Bearer: []
     parameters:
       - name: body
         in: body
@@ -330,6 +334,8 @@ def get_product(product_id):
     ---
     tags:
       - Products
+    security:
+      - Bearer: []
     parameters:
       - name: product_id
         in: path
@@ -437,6 +443,8 @@ def update_product(product_id):
     ---
     tags:
       - Products
+    security:
+      - Bearer: []
     parameters:
       - name: product_id
         in: path
@@ -599,6 +607,8 @@ def delete_product(product_id):
     ---
     tags:
       - Products
+    security:
+      - Bearer: []
     parameters:
       - name: product_id
         in: path
