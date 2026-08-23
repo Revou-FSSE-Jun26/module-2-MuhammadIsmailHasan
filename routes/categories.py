@@ -17,11 +17,38 @@ def get_categories():
     security:
       - Bearer: []
     parameters:
+      - name: name
+        in: query
+        type: string
+        required: false
+        description: Filter by category name (partial match)
       - name: with_products
         in: query
         type: boolean
         required: false
-        description: Include the products belonging to each category
+        description: Include products belonging to each category (default false)
+      - name: sort_by
+        in: query
+        type: string
+        required: false
+        enum: [id, name, created_at]
+        description: Sort field (default id)
+      - name: order
+        in: query
+        type: string
+        required: false
+        enum: [asc, desc]
+        description: Sort direction (default asc)
+      - name: page
+        in: query
+        type: integer
+        required: false
+        description: Page number (default 1)
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        description: Items per page (default 10)
     responses:
       200:
         description: Categories retrieved successfully
@@ -51,7 +78,40 @@ def get_categories():
                   is_active:
                     type: boolean
                     example: true
-      500:
+                  products:
+                    type: array
+                    description: Only included when with_products=true
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          example: 1
+                        name:
+                          type: string
+                          example: Laptop
+                        price:
+                          type: number
+                          example: 999.99
+                        stock:
+                          type: integer
+                          example: 50
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                  example: 1
+                limit:
+                  type: integer
+                  example: 10
+                total_items:
+                  type: integer
+                  example: 5
+                total_pages:
+                  type: integer
+                  example: 1
+      404:
         description: Failed to get categories
         schema:
           type: object
@@ -64,26 +124,56 @@ def get_categories():
               example: false
     """
     try:
-        with_products = request.args.get('with_products', 'false').lower() == 'true'
-        categories = Category.query.filter_by(is_active=True).all()
-
-        if with_products:
-            data = [category.to_dict_with_products() for category in categories]
+        query = Category.query.filter_by(is_active=True)
+        
+        name = request.args.get('name')
+        if name:
+            query = query.filter(Category.name.ilike(f'%{name}%'))
+        
+        sort_by = request.args.get('sort_by', 'id')
+        order = request.args.get('order', 'asc')
+        
+        sort_columns = {
+            'id': Category.id,
+            'name': Category.name,
+            'created_at': Category.created_at
+        }
+        sort_column = sort_columns.get(sort_by, Category.name)
+        
+        if order == 'desc':
+            query = query.order_by(sort_column.desc())
         else:
-            data = [category.to_dict() for category in categories]
-
+            query = query.order_by(sort_column.asc())
+        
+        page = request.args.get('page', 1, type=int)
+        limit = request.args.get('limit', 10, type=int)
+        
+        paginated = query.paginate(page=page, per_page=limit, error_out=False)
+        
+        with_products = request.args.get('with_products', 'false').lower() == 'true'
+        if with_products :
+          data = [category.to_dict_with_products() for category in paginated.items] 
+        else :
+          data = [category.to_dict() for category in paginated.items]
+        
         return jsonify({
             'message': 'get all categories success',
             'status': True,
-            'data': data
+            'data': data,
+            'pagination': {
+                'page': paginated.page,
+                'limit': paginated.per_page,
+                'total_items': paginated.total,
+                'total_pages': paginated.pages
+            }
         }), 200
-
-    except Exception:
-        current_app.logger.exception('failed to get all categories')
+            
+    except Exception as e:
         return jsonify({
             'message': 'failed get all categories',
-            'status': False
-        }), 500
+            'status': False,
+            'error': str(e)
+        }), 404
 
 
 @categories_bp.route('/', methods=['POST'])
@@ -239,11 +329,6 @@ def get_category(category_id):
         type: integer
         required: true
         description: The ID of the category to retrieve
-      - name: with_products
-        in: query
-        type: boolean
-        required: false
-        description: Include the products belonging to this category
     responses:
       200:
         description: Category found
@@ -271,6 +356,23 @@ def get_category(category_id):
                 is_active:
                   type: boolean
                   example: true
+                products:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      name:
+                        type: string
+                        example: Laptop
+                      price:
+                        type: number
+                        example: 999.99
+                      stock:
+                        type: integer
+                        example: 50
       404:
         description: Category not found
         schema:
@@ -303,13 +405,10 @@ def get_category(category_id):
                 'status': False
             }), 404
 
-        with_products = request.args.get('with_products', 'false').lower() == 'true'
-        data = category.to_dict_with_products() if with_products else category.to_dict()
-
         return jsonify({
             'message': 'success get category',
             'status': True,
-            'data': data
+            'data': category.to_dict_with_products()
         }), 200
 
     except Exception:
