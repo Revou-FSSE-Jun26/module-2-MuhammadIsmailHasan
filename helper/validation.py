@@ -1,5 +1,11 @@
 from models import Category
+import re
 
+def is_valid_email(email):
+    EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    if not email or not isinstance(email, str):
+        return False
+    return EMAIL_REGEX.match(email.strip()) is not None
 
 def validation_category_data(data, required_all=True):
     name = data.get('name')
@@ -58,4 +64,44 @@ def validation_products_data(data, required_all=True):
             return "category id not found", 404
         
     return None, None
+
+def validation_users_data(data, required_all=True):
+    email = data.get('email')
+    username = data.get('username')
+    password = data.get('password')
+    role = data.get('role')
     
+    if required_all and email is None:
+        return "email is required", 400
+    if email is not None:
+        if not isinstance(email, str) or not email.strip():
+            return "email cannot be empty", 400
+        if len(email) > 100:
+            return "email cannot exceed 100 characters", 422
+        if not is_valid_email(email):
+            return "invalid email format", 400
+    
+    if required_all and username is None:
+        return "username is required", 400
+    if username is not None:
+        if not isinstance(username, str) or not username.strip():
+            return "username cannot be empty", 400
+        if len(username) > 100:
+            return "username cannot exceed 100 characters", 422
+    
+    if required_all and password is None:
+        return "password is required", 400
+    if password is not None:
+        if not isinstance(password, str) or not password.strip():
+            return "password cannot be empty or must be text", 400
+        
+    if required_all and role is None:
+        return "role is required", 400 
+    roles = ('buyer', 'seller')
+    if role is not None:
+        if not isinstance(role, str) or not role.strip():
+            return "role cannot be empty or must be text", 400
+        if role not in roles:
+            return "user role must be buyer or seller only", 400
+    
+    return None, None

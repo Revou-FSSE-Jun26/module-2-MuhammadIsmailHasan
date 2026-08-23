@@ -58,19 +58,19 @@ def seed_users():
             'username': 'jane_smith',
             'email': 'jane@example.com',
             'password': 'password456',
-            'role': 'user'
+            'role': 'buyer'
         },
         {
             'username': 'bob_wilson',
             'email': 'bob@example.com',
             'password': 'password789',
-            'role': 'user'
+            'role': 'buyer'
         },
         {
             'username': 'alice_brown',
             'email': 'alice@example.com',
             'password': 'passwordabc',
-            'role': 'user'
+            'role': 'seller'
         },
         {
             'username': 'charlie_davis',

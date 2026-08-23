@@ -2,6 +2,8 @@ from flask import Blueprint, jsonify, request, current_app
 from models.users import User
 from helper.utils import db
 from sqlalchemy.exc import IntegrityError
+from helper.validation import validation_users_data
+from helper.auth import hash_password
 import bcrypt
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
@@ -104,52 +106,19 @@ def register_user():
             "status": False
         }), 400
 
-    if 'username' not in data:
+    error_message, error_code = validation_users_data(data, True)
+    if error_message is not None:
         return jsonify({
-                'message': "username is required",
-                'status': False,
-            }), 400 
-    if 'email' not in data:
-        return jsonify({
-                'message': "email is required",
-                'status': False,
-            }), 400 
-        
-    if 'password' not in data:
-        return jsonify({
-                'message': "password is required",
-                'status': False,
-            }), 400 
-    
-    existing_user = User.query.filter_by(username=data.get('username')).first()
-    if existing_user:
-        return jsonify({
-            'message': "username already exists",
-            'status': False,
-            'error': "this username is already registered"
-        }), 409
-    
-    # Check if email already exists
-    existing_email = User.query.filter_by(email=data.get('email')).first()
-    if existing_email:
-        return jsonify({
-            'message': "email already exists",
-            'status': False,
-            'error': "this email is already registered"
-        }), 409
+            'message': error_message,
+            'status': False
+        }), error_code 
     
     try:
-        password_hash = bcrypt.hashpw(
-            data["password"].encode("utf-8"), bcrypt.gensalt()
-        ).decode("utf-8")
-
-        # role is never taken from the request body, otherwise any caller could
-        # register themselves as an admin. changing a role is an admin-only action.
         new_user = User(
             username=data.get('username'),
             email=data.get('email'),
-            password_hash=password_hash,
-            role='buyer'
+            password_hash=hash_password(data['password']),
+            role=data.get('role', 'buyer')
         )
         
         db.session.add(new_user)
@@ -182,7 +151,7 @@ def register_user():
                 'status': False
             }), 409
 
-    except Exception:
+    except Exception as e:
         db.session.rollback()
         current_app.logger.exception('failed to create user')
 
