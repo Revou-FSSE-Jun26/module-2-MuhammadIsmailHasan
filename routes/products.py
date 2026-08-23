@@ -2,10 +2,12 @@ from flask import Blueprint, jsonify, request, current_app
 from models.products import Product
 from helper.utils import db
 from helper.validation import validation_products_data
+from helper.auth import roles_required
 
 products_bp = Blueprint('products', __name__, url_prefix='/products')
 
 @products_bp.route('/', methods=['GET'])
+@roles_required('buyer', 'seller', 'admin')
 def get_products():
     """Get all products.
     ---

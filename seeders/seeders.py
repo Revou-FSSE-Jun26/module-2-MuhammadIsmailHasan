@@ -86,7 +86,7 @@ def seed_users():
             password_hash = bcrypt.hashpw(
                 user_data['password'].encode('utf-8'), 
                 bcrypt.gensalt()
-            )
+            ).decode('utf-8')
             user = User(
                 username=user_data['username'],
                 email=user_data['email'],

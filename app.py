@@ -6,6 +6,7 @@ from config import SWAGGER_CONFIG
 from models import User, Product, Category, Order
 from routes import register_routes
 from errors import register_error_handlers
+from flask_jwt_extended import JWTManager
 
 def init_app():
     app = Flask(__name__)
@@ -13,6 +14,7 @@ def init_app():
 
     db.init_app(app)
     Migrate(app, db)
+    jwt = JWTManager(app)
     Flasgger(app, config=SWAGGER_CONFIG)
 
     register_routes(app)
