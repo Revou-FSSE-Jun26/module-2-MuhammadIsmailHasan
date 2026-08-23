@@ -37,3 +37,12 @@ __pycache__/
 # Log files
 # =======
 *.log
+
+
+# =======
+# Jira credentials and import artifacts
+# =======
+jira/.env.jira
+!jira/.env.jira.example
+jira/.jira-import-state.json
+jira/02-stories-linked.csv

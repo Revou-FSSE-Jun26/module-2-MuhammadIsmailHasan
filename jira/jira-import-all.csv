@@ -1,0 +1,631 @@
+Issue Id,Parent,Issue Type,Summary,Description,Priority,Story Points,Labels,Labels
+1,,Epic,MVP - Auth Foundation with JWT and Roles,"Close the two rubric gaps in the user module and land JWT authentication up front.
+
+JWT is optional per the rubric, but it is promoted into the MVP tier deliberately: building it before the order module means the order endpoints read the caller from the token from day one instead of being written twice. Role normalization is here too because the role decorators need a fixed vocabulary.",Highest,,mvp,auth
+2,,Epic,MVP - Order Module,"Build the entire order module. Nothing exists today: routes/__init__.py registers only users, products and categories, and the order_items junction has no quantity column.
+
+The largest MVP epic and the only module scoring zero against the rubric. Depends on epic 1 for caller identity.",Highest,,mvp,orders
+3,,Epic,MVP - Product and Category Compliance,"Product and category CRUD already pass the rubric. Two behaviour gaps remain: the product delete guard, and category detail returning its products.",Highest,,mvp,api
+4,,Epic,MVP - Migrations Seeders Tests and Docs,"Keep migrations, seed data, tests and API docs valid for the MVP scope so the submission runs clean from a fresh clone.",High,,mvp,
+5,,Epic,IMPROVEMENT - Marshmallow DTO Layer,"Replace helper/validation.py tuple-returning checks and model to_dict methods with Marshmallow schemas for input validation and output serialization.
+
+Scheduled as the FIRST improvement epic, immediately after every rubric requirement passes. Doing it before epics 7 to 9 is much cheaper than retrofitting schemas onto fifteen new endpoints afterwards.",High,,improvement,dto
+6,,Epic,IMPROVEMENT - Auth Enhancements,"Refresh tokens, logout revocation, email availability check and rate limiting. Builds on the JWT foundation delivered in epic 1.",Medium,,improvement,auth
+7,,Epic,IMPROVEMENT - User Profile and Addresses,Add a one-to-one user_profiles table and a one-to-many user_addresses table with exactly one default address per user.,Medium,,improvement,database
+8,,Epic,IMPROVEMENT - Product Catalog Enhancements,"Seller ownership, slug, images, nested category routes and extended filtering.",Medium,,improvement,api
+9,,Epic,IMPROVEMENT - Order Status Lifecycle,"Status transition rules, a payment endpoint, cancellation with stock restore, order filtering, and an immutable shipping address.",Medium,,improvement,orders
+10,,Epic,IMPROVEMENT - Seller Ownership Rules,"Restrict product mutation to the owning seller, and extend order permissions to sellers. Buyer-scoping already lands in epic 2 because JWT is in the MVP tier.",Medium,,improvement,auth
+11,,Epic,IMPROVEMENT - Data Integrity and Robustness,"Concurrency safety, database-level constraints and migration chain review.",Medium,,improvement,database
+101,1,Story,Expose POST /users as the registration route,"As an API consumer I want registration at POST /users so that the endpoint matches the required specification.
+
+Acceptance criteria:
+- POST /api/v1/users registers a new user with the existing validation and bcrypt hashing behaviour
+- A decision is recorded and documented: either /users/register is kept as a deprecated alias, or it is removed and all callers updated
+- tests/test_endpoints.py and the README endpoint table reflect the chosen path
+- Response body and status codes are unchanged from the current implementation
+
+Notes:
+- The rubric lists POST /users; the code currently registers at POST /users/register.
+- Purely a routing change. Do not fold validation refactoring in here, that is epic 5.",Highest,2,mvp,auth
+102,1,Story,Add POST /auth/login verifying credentials,"As a registered user I want to log in so that I can be identified on subsequent requests.
+
+Acceptance criteria:
+- A new auth blueprint is registered at /api/v1/auth
+- POST /api/v1/auth/login accepts email and password
+- Password is verified with bcrypt against password_hash
+- On success it returns the user DTO and updates users.last_login
+- Wrong credentials return 401 with a generic message that does not reveal whether the email exists
+- Soft-deleted users (is_active false) cannot log in
+
+Notes:
+- Credential verification only. Token issuance is ticket 104, kept separate so this can be tested on its own.
+- last_login already exists on the model but is never written today.",Highest,3,mvp,auth
+103,1,Story,Add JWT dependencies and secret configuration,"As a developer I need the auth library installed and secrets configured before token work can begin.
+
+Acceptance criteria:
+- requirements.txt pins flask-jwt-extended at an exact version
+- config.py exposes SECRET_KEY, JWT_SECRET_KEY and JWT_ACCESS_TOKEN_EXPIRES from the environment
+- .env.example documents the new variables and the app fails fast with a clear message if JWT_SECRET_KEY is missing
+- JWTManager is initialised in init_app() alongside db and Migrate
+
+Notes:
+- config.py is loaded via app.config.from_object('config'), so only UPPERCASE module attributes are picked up.
+- No JWT package is in requirements.txt today.",Highest,2,mvp,auth
+104,1,Story,Issue a JWT access token from POST /auth/login,"As a client I want a token from login so that I can authenticate later requests without resending credentials.
+
+Acceptance criteria:
+- Login returns access_token alongside the user DTO
+- Token identity is the user id, with the role carried as an additional claim
+- Token expiry is read from configuration, not hard-coded
+- The credential validation behaviour from ticket 102 is unchanged
+
+Notes:
+- Extends 102 rather than replacing it.",Highest,2,mvp,auth
+105,1,Story,Normalize user role to buyer seller admin with a data migration,"As a product owner I want roles constrained to buyer, seller and admin so that the role decorators have a fixed vocabulary.
+
+Acceptance criteria:
+- Migration backfills existing role='user' rows to 'buyer' BEFORE the constraint is added
+- CHECK constraint ck_users_role_valid permits only buyer, seller and admin
+- server_default changes from 'user' to 'buyer'
+- Role is never accepted from the registration body; changing a role is admin-only
+- downgrade reverses both the constraint and the backfill
+
+Notes:
+- Adding the CHECK before the backfill will fail on existing data.
+- seeders.py currently creates role='user' and must change in the same PR or the seed breaks.
+- Needed before ticket 106 so the role claim means something.",Highest,3,mvp,database
+106,1,Story,Add auth decorators for token and role checks,"As a developer I want reusable decorators so that route protection is consistent instead of copy-pasted across the order endpoints.
+
+Acceptance criteria:
+- A roles_required(*roles) decorator returns 403 when the token role is not permitted
+- A current_user helper resolves the identity claim to a User row
+- A soft-deleted user cannot use a still-valid token; the request returns 401
+- Decorators live in one module, e.g. helper/auth.py, with at least one passing and one failing case tested
+
+Notes:
+- BLOCKS epic 2. Every order endpoint uses these, so land it before ticket 203.",Highest,3,mvp,auth
+107,1,Story,Add GET /auth/me returning the authenticated user,"As a logged-in user I want to fetch my own record so that the client can render my session.
+
+Acceptance criteria:
+- GET /api/v1/auth/me requires a valid token and returns the user DTO
+- A missing or expired token returns 401 in the standard envelope
+- Once epic 7 lands, the response also carries the profile and default address",High,1,mvp,auth
+108,1,Story,Add 401 403 and 409 error handlers to the standard envelope,"As an API consumer I want every error to share one shape so that clients can parse failures uniformly.
+
+Acceptance criteria:
+- errors.py registers handlers for 400, 401, 403 and 409 returning {message, status}
+- flask-jwt-extended error callbacks are wired to the same envelope rather than its own JSON shape
+- Existing 404, 405 and 500 behaviour is unchanged
+
+Notes:
+- errors.py registers only 404, 405 and 500 today, so every auth failure would break the response envelope the rest of the API promises.
+- Land this alongside 106 or the first 401 you hit will look like a bug.",High,2,mvp,auth
+201,2,Story,Rework order_items into an OrderItem model with quantity and unit_price,"As a data owner I want order lines to record quantity and the price paid so that orders are accurate and their totals verifiable.
+
+Acceptance criteria:
+- order_items becomes a mapped OrderItem model instead of a bare db.Table
+- Columns: order_id, product_id, quantity with a CHECK of at least 1, and unit_price captured at purchase time
+- subtotal is exposed as quantity multiplied by unit_price
+- Order.total_amount equals the sum of its line subtotals, asserted by a test
+- The Order to Product relationship is expressed through the new model
+
+Notes:
+- BLOCKS every other ticket in this epic. The current junction has only order_id and product_id, so an order literally cannot express 'two of this item'.
+- Without a unit_price snapshot, a later price change silently rewrites order history and totals stop reconciling.",Highest,5,mvp,database
+202,2,Story,Create the orders blueprint and register it,"As a developer I need an orders route module to exist before any order endpoint can be built.
+
+Acceptance criteria:
+- routes/orders.py defines orders_bp
+- Registered in routes/__init__.py under /api/v1/orders
+- models/__init__.py exports OrderItem alongside the existing models
+- The app boots and /apidocs renders the new Orders tag
+
+Notes:
+- routes/__init__.py currently registers only users, products and categories.",Highest,2,mvp,orders
+203,2,Task,Decide the auth compatibility policy for graded endpoints,"As a team we need to decide whether the order endpoints accept a token only, or also fall back to user_id in the request body, because a grader may test them without a token.
+
+The risk: the rubric states that sending user_id in the body or params is enough. If POST /orders is token-only and a grader's script omits the Authorization header, the endpoint returns 401 and reads as broken rather than as stricter than required.
+
+Options:
+- A: token only. Cleanest. Document it loudly in the README and Swagger, and supply a ready-to-run request example that includes login.
+- B: token if present, otherwise fall back to user_id from the body. Safe for grading, but two identity paths to test and an obvious hole left open.
+- C: token only for write operations, fallback allowed on reads.
+
+Acceptance criteria:
+- The decision and its rationale are recorded before ticket 204 starts
+- The choice is stated in the README next to the order endpoint docs
+- If A is chosen, the README opens with a two-step curl example: login, then place an order with the returned token
+
+Notes:
+- BLOCKS 204, 205, 206 and 207. Decide this at planning, not mid-sprint.
+- Recommendation: A, with a very prominent README example. B leaves the exact hole that promoting JWT was meant to close.",Highest,1,mvp,spike
+204,2,Story,Add POST /orders to place an order and decrement stock,"As a buyer I want to place an order so that I can purchase products.
+
+Acceptance criteria:
+- POST /api/v1/orders accepts a list of items, each with product_id and quantity
+- The buyer is taken from the token identity, following the policy agreed in ticket 203
+- A user_id supplied in the body is ignored or rejected per that same policy, never trusted
+- total_amount is computed server-side from current product prices and never read from the request body
+- Each product's stock is decremented by the ordered quantity
+- Insufficient stock returns 409 naming the offending product, and the whole order rolls back with no stock change
+- Ordering an inactive or soft-deleted product is rejected
+- An empty or missing items list returns 400
+- Initial status is waiting_for_payment
+
+Notes:
+- Order creation and stock decrement must share one transaction.
+- This implementation uses a read-then-write on stock, which oversells under concurrent requests. Ticket 1101 hardens it; that is an accepted MVP limitation, not an oversight.",Highest,5,mvp,orders
+205,2,Story,Add GET /orders listing the authenticated user's orders,"As a buyer I want to list my orders so that I can review what I have purchased.
+
+Acceptance criteria:
+- GET /api/v1/orders returns the authenticated user's active orders
+- The user is resolved from the token, so there is no user_id parameter to tamper with
+- A caller cannot retrieve another user's orders by any parameter
+- Each order includes id, total_amount, status and ordered_at
+- Soft-deleted orders are excluded
+
+Notes:
+- Decide and document whether the list carries line items or summaries only. Summaries keep the payload small, with detail in ticket 206.
+- Because identity comes from the token, the cross-user data leak that a user_id query parameter would have created never exists.",Highest,2,mvp,orders
+206,2,Story,Add GET /orders/<id> returning order items with product details,"As a buyer I want full order detail so that I can see exactly what I bought and at what price.
+
+Acceptance criteria:
+- GET /api/v1/orders/<id> returns the order plus its order items
+- Each item includes product id, product name, quantity, unit_price and subtotal
+- Product details come from the joined product, but the price shown is the stored unit_price, not the product's current price
+- Items load via a join or eager loading, not one query per item
+- Another user's order returns 404 rather than 403, so order ids are not enumerable
+- An unknown or soft-deleted order returns 404
+
+Notes:
+- This ticket is why 201 must land first. There is nothing meaningful to return without quantity and unit_price.",Highest,3,mvp,orders
+207,2,Story,Add DELETE /orders/<id> with a documented stock policy,"As a buyer I want to remove an order so that mistakes do not stay on my account.
+
+Acceptance criteria:
+- DELETE /api/v1/orders/<id> soft-deletes the order by setting is_active to false, matching the pattern used elsewhere
+- Only the buyer who placed the order, or an admin, may delete it; anyone else gets 404
+- A decision is recorded and documented on whether deletion restores product stock, and the chosen behaviour is implemented
+- Deleting an already-deleted order returns 404 and does NOT restore stock a second time
+- Stock restore and the status change share one transaction
+- An unknown order returns 404
+
+Notes:
+- OPEN QUESTION: the original business rules describe stock restore on cancel, not on delete. Recommendation: restore stock only for orders not yet shipped, and refuse deletion of shipped or delivered orders with 409, so inventory cannot be conjured out of a fulfilled sale.
+- Without a guard inside the transaction, a double delete restores stock twice. Most likely bug in this epic.
+- Buyer-scoping is possible at MVP tier only because JWT was promoted into epic 1. Seller rights are ticket 1002.",Highest,3,mvp,orders
+301,3,Story,Block product deletion while active orders reference it,"As a data owner I want products with live orders protected from deletion so that order history stays resolvable.
+
+Acceptance criteria:
+- Before deleting, count the order items linked to the product whose parent order status is active
+- A non-zero count returns 409 and reports how many active orders block the deletion
+- The check uses a COUNT query and does not load the collection into memory
+- Products whose only orders are delivered or cancelled can still be deleted
+- Both the blocked and the allowed path are covered by tests
+
+Notes:
+- Explicitly named in the rubric: 'Delete a product (blocked if active orders exist)'.
+- Depends on 201, since the guard counts order items.",Highest,3,mvp,api
+302,3,Task,Define and document the active order status set,"As a developer I need one shared definition of 'active order' so that the delete guard and any future reporting agree.
+
+Acceptance criteria:
+- Active means status in waiting_for_payment, processing or shipped
+- delivered and cancelled are explicitly NOT active and do not block deletion
+- The set is declared once as a module-level constant and reused by ticket 301
+- The definition is written into the README
+
+Notes:
+- Small, but leaving it implicit is exactly how a guard and its reports drift apart.",High,1,mvp,
+303,3,Story,Return products in GET /categories/<id> by default,"As an API consumer I want category detail to include its products so that the response matches the required specification.
+
+Acceptance criteria:
+- GET /api/v1/categories/<id> includes the category's active products with no query flag required
+- Only active products are listed
+- Categories with no products return an empty array, not null
+- Swagger and the README are updated to match
+
+Notes:
+- The rubric says 'Get a specific category along with its products'. Today products appear only when ?with_products=true is passed, so the default response does not satisfy it.
+- Decide whether with_products stays supported on the list endpoint, where defaulting to true would be expensive.",Highest,1,mvp,api
+401,4,Task,Write the Alembic migration for the order_items rework,"As a developer I want the junction rework delivered as a reversible migration so that existing databases can move forward.
+
+Acceptance criteria:
+- Migration adds quantity and unit_price to order_items
+- Existing rows are backfilled with quantity 1 and the product's current price BEFORE any NOT NULL constraint is applied
+- The CHECK on quantity is added after the backfill
+- downgrade reverses the change, verified by upgrade, downgrade, upgrade against seeded data
+- The migration extends the existing chain with no branch point
+
+Notes:
+- Applying NOT NULL or the CHECK before the backfill will fail against seeded data.
+- Coordinate with the role migration in ticket 105 so the two form one linear chain.",High,2,mvp,database
+402,4,Task,Update seeders for roles and order items,"As a developer I want seed data valid against the new schema so that local setup and manual testing keep working.
+
+Acceptance criteria:
+- Seeded users use buyer, seller and admin instead of 'user'
+- Seeded orders have order items with a realistic quantity and a unit_price matching the product price at seed time
+- Seeded order total_amount equals the sum of its line subtotals
+- Seeded product stock is consistent with the quantities the seeded orders consumed
+- python3 -m seeders.seeders runs clean against a freshly migrated database
+
+Notes:
+- seeders.py currently creates role='user', which violates the CHECK constraint from ticket 105.",High,2,mvp,
+403,4,Task,Extend the test suite for auth and the order module,"As a developer I want the new endpoints covered so that regressions surface before submission.
+
+Acceptance criteria:
+- A test helper logs in once and reuses the token across protected requests
+- Happy path coverage for login, POST /orders, GET /orders, GET /orders/<id> and DELETE /orders/<id>
+- Negative coverage: wrong password 401, no token 401, wrong role 403, insufficient stock 409, unknown order 404, product delete blocked by an active order 409
+- A test asserts another user's order returns 404, not 403
+- A test asserts product stock decreased by exactly the ordered quantity
+- A test asserts total_amount equals the sum of the line subtotals
+- The full suite passes against a migrated and seeded database
+
+Notes:
+- tests/test_endpoints.py covers users and products only and has no token handling, so it will fail everywhere once epic 1 lands. Budget for that.",High,5,mvp,
+404,4,Task,Update Swagger and README for the MVP endpoints,"As a reviewer I want accurate documentation so that I can exercise the API without reading the source.
+
+Acceptance criteria:
+- Swagger declares the bearer token security definition and marks every protected endpoint
+- Every auth and order endpoint has a docstring covering request, response and error codes, matching the depth of the existing product docs
+- The README opens with a runnable two-step example: log in, then call a protected endpoint with the returned token
+- README endpoint tables list the auth and order routes
+- The schema diagram is regenerated to show order_items with quantity and unit_price
+- Recorded decisions are documented: the registration path from 101, the auth compatibility policy from 203, the delete stock policy from 207, and the active status set from 302
+
+Notes:
+- The README currently shows a register example accepting a role field, which the code deliberately ignores. Fix that while you are in there.
+- The two-step token example is the main mitigation for the grading risk in ticket 203.",High,3,mvp,docs
+501,5,Story,Create the schemas package and Marshmallow base configuration,"As a developer I want a schemas layer so that validation and serialization stop living inside route handlers.
+
+Acceptance criteria:
+- requirements.txt pins marshmallow and flask-marshmallow at exact versions
+- A schemas/ package holds one module per resource
+- A base schema sets unknown=RAISE so unexpected fields are rejected rather than silently dropped
+- Load and dump schemas are clearly separated per resource
+
+Notes:
+- FIRST improvement ticket. Do not start before every rubric requirement passes.",High,3,improvement,dto
+502,5,Story,Migrate product validation to Marshmallow schemas,"As a developer I want product input validated declaratively so the rules are readable and reusable.
+
+Acceptance criteria:
+- ProductCreateSchema and ProductUpdateSchema replace validation_products_data
+- Existing rules preserved: name required max 255, description max 1000, price non-negative and max 11 digits, integer stock, category_id must reference an active category
+- partial=True drives the update case instead of the required_all boolean
+- Route handlers no longer perform manual isinstance checks
+
+Notes:
+- helper/validation.py returns (message, code) tuples and switches on a required_all flag today.",High,3,improvement,dto
+503,5,Story,Migrate category validation to Marshmallow schemas,"As a developer I want category input schema-validated so that validation is consistent across resources.
+
+Acceptance criteria:
+- CategoryCreateSchema and CategoryUpdateSchema replace validation_category_data
+- Name required, trimmed and max 255; uniqueness still returns 409 rather than 422
+- helper/validation.py is deleted once products and categories are both migrated",Medium,2,improvement,dto
+504,5,Story,Add user and auth schemas,"As a developer I want user payloads schema-driven so that password and role fields cannot leak or be injected.
+
+Acceptance criteria:
+- RegisterSchema, LoginSchema and UserOutputSchema exist
+- password is load_only and never appears in any dump; password_hash is never exposed anywhere
+- role is dump_only so it cannot be set through registration
+- Email format validation moves into the schema from ad-hoc checks",High,3,improvement,dto
+505,5,Story,Add order schemas including a status-only update,"As a developer I want order payloads schema-validated so clients cannot submit fields the business rules forbid.
+
+Acceptance criteria:
+- OrderCreateSchema accepts an items list, each entry with product_id and a quantity of at least 1
+- OrderStatusUpdateSchema accepts status only and rejects any other field with 422
+- OrderOutputSchema nests order items with quantity, unit_price and subtotal
+- total_amount is dump_only and never accepted from the client
+
+Notes:
+- Pairs with ticket 902, which enforces the same restriction at the route level.",High,3,improvement,dto
+506,5,Story,Validate query parameters via schema and fix the sort fallback,"As an API consumer I want bad query parameters rejected clearly so that I do not silently get the wrong results.
+
+Acceptance criteria:
+- A shared query schema validates page, limit, sort_by and order
+- sort_by is restricted to an explicit per-resource whitelist; an unknown value returns 422 instead of falling back silently
+- limit has an enforced maximum so result sets stay bounded
+- Applied to both the product list and the order list
+
+Notes:
+- BUG to fix here: routes/products.py falls back to Product.name for an unknown sort_by, while its own Swagger doc promises a default of id.",Medium,3,improvement,dto
+507,5,Bug,Normalize Decimal serialization across product and order responses,"As an API consumer I want monetary values to have one consistent JSON type so that clients do not need per-endpoint parsing.
+
+Acceptance criteria:
+- Product.price, Order.total_amount, unit_price and subtotal all serialize identically
+- The chosen representation, string for precision or float for convenience, is documented in the README
+- A test asserts the type is consistent across the product and order endpoints
+
+Notes:
+- Product.to_dict casts price with float(), while Order.to_dict returns a raw Decimal that Flask renders as a string. The API contradicts itself today.",Medium,2,improvement,dto
+508,5,Story,Add a central 422 handler for Marshmallow validation errors,"As an API consumer I want validation failures in the standard envelope so that error handling is uniform.
+
+Acceptance criteria:
+- ValidationError is caught by one app-level handler
+- The response is 422 with {message, status} plus per-field detail under an 'errors' key
+- No route handler catches ValidationError itself
+- Existing error wording for previously hand-validated fields is preserved where practical
+
+Notes:
+- Extends the handlers added in ticket 108.",Medium,2,improvement,dto
+601,6,Story,Add GET /users/check-email for registration availability,"As a visitor filling the signup form I want to know if an email is taken so that I get feedback before submitting.
+
+Acceptance criteria:
+- GET /api/v1/users/check-email?email=... returns {available: true|false}
+- Email format is validated; a malformed address returns 422 rather than false
+- The check is case-insensitive and treats soft-deleted users the same way the register flow does
+- The endpoint is rate-limited per IP
+
+Notes:
+- This is an account enumeration surface by design. Rate limiting is the mitigation and the tradeoff belongs in the README.
+- Depends on ticket 603 for the rate limiter.",Medium,2,improvement,auth
+602,6,Story,Add refresh token and logout denylist,"As a logged-in user I want my session refreshed without re-entering my password, and a real logout.
+
+Acceptance criteria:
+- Login also returns a refresh_token with a longer expiry
+- POST /api/v1/auth/refresh exchanges a refresh token for a new access token
+- POST /api/v1/auth/logout revokes the presented token
+- A revoked token returns 401
+
+Notes:
+- Access-token-only from epic 1 is sufficient for this module, so this is a genuine enhancement rather than a fix.",Medium,5,improvement,auth
+603,6,Story,Add rate limiting to public endpoints,"As an operator I want public endpoints rate-limited so that they cannot be abused for enumeration or brute force.
+
+Acceptance criteria:
+- Login and check-email are rate-limited per IP
+- Exceeding the limit returns 429 in the standard envelope
+- Limits are configurable rather than hard-coded
+- The chosen limits are documented in the README
+
+Notes:
+- Login from ticket 102 is brute-forceable with no limiter in place.",Medium,2,improvement,auth
+701,7,Story,Add the user_profiles table and model,"As a user I want a profile so that my display details are separate from my credentials.
+
+Acceptance criteria:
+- user_profiles table with full_name, phone, avatar_url, updated_at and is_active
+- user_id is a foreign key with a UNIQUE constraint enforcing one-to-one
+- updated_at is maintained on every write via onupdate
+- Migration upgrade and downgrade both verified
+
+Notes:
+- avatar_url stores a URL string only. File upload is explicitly out of scope.",Medium,3,improvement,database
+702,7,Story,Add GET and PUT /users/me/profile,"As a logged-in user I want to read and edit my profile so that I can keep my details current.
+
+Acceptance criteria:
+- GET returns the caller's profile, auto-creating an empty one if absent
+- PUT accepts partial updates of full_name, phone and avatar_url
+- Phone format is validated
+- No route reaches another user's profile",Medium,3,improvement,api
+703,7,Story,Add the user_addresses table and model,"As a user I want multiple saved addresses so that I can ship to different places.
+
+Acceptance criteria:
+- user_addresses table with a user_id foreign key, one-to-many from users
+- Fields cover recipient name, phone, street, city, province, postal_code and country
+- is_default and is_active booleans, consistent with the soft-delete pattern used elsewhere
+- The foreign key uses ondelete RESTRICT to match that approach",Medium,3,improvement,database
+704,7,Story,Enforce at most one default address per user,"As a user I want one address marked default so that checkout has an unambiguous destination.
+
+Acceptance criteria:
+- A partial unique index guarantees at most one default per user where is_default and is_active are both true
+- The first address a user creates automatically becomes the default
+- Setting a new default clears the previous one inside a single transaction
+- The rule is enforced in the database, not only in application code
+
+Notes:
+- Postgres partial unique index: UNIQUE (user_id) WHERE is_default AND is_active.
+- 'Exactly one' cannot hold for a user with zero addresses, so the real invariant is 'at most one default, and the first insert becomes default'.",Medium,5,improvement,database
+705,7,Story,Include the default address in the user output DTO,"As a client I want the user response to carry the default address so that checkout renders without a second request.
+
+Acceptance criteria:
+- UserOutputSchema nests the default address
+- Users with no addresses return null rather than erroring
+- The nested address does not trigger an N+1 query on user list endpoints
+
+Notes:
+- OPEN QUESTION: this interprets the backlog line 'add address at user' as a DTO concern, since the table itself is ticket 703. Confirm before starting.",Medium,2,improvement,dto
+706,7,Story,Add CRUD endpoints for user addresses,"As a logged-in user I want to manage my address book so that I can add and remove destinations.
+
+Acceptance criteria:
+- GET, POST, PUT and DELETE under /api/v1/users/me/addresses
+- Delete is a soft delete, consistent with the rest of the codebase
+- Every operation is scoped to the caller; another user's address returns 404, not 403
+- A maximum address count per user is enforced",Medium,5,improvement,api
+707,7,Story,Add set-default address and guard default deletion,"As a user I want to promote another address to default and be stopped from leaving myself with none.
+
+Acceptance criteria:
+- PATCH /api/v1/users/me/addresses/<id>/default promotes the given address and demotes the previous default atomically
+- Deleting the default is rejected with 409 while other active addresses exist and none has been promoted
+- Deleting the last remaining address is allowed, leaving the user with no default
+- Both paths are covered by tests",Medium,3,improvement,api
+801,8,Story,Add user_id ownership column to products,"As a seller I want products attributed to me so that ownership rules can be enforced.
+
+Acceptance criteria:
+- products.user_id foreign key to users.id, indexed
+- Migration backfills existing rows to a designated seller before the column becomes NOT NULL
+- On create, user_id comes from the token identity and never from the request body
+- Only seller and admin roles may create products
+
+Notes:
+- Making the column NOT NULL without a backfill will fail against seeded data.
+- The token identity it needs already exists, since JWT landed in epic 1.",Medium,3,improvement,database
+802,8,Story,Add slug to products with generation and backfill,"As a client I want readable product URLs so that links are shareable.
+
+Acceptance criteria:
+- products.slug with a UNIQUE constraint and an index
+- Slug generated from the name, with numeric-suffix collision resolution
+- Migration backfills every existing row BEFORE the UNIQUE constraint is applied
+- Whether renaming a product changes its slug is decided and documented either way",Medium,3,improvement,database
+803,8,Story,Add GET /products/slug/<slug>,"As a client I want to fetch a product by slug so that pretty URLs resolve without an ID.
+
+Acceptance criteria:
+- Returns the same detail payload as the ID route
+- Unknown or soft-deleted slugs return 404
+- The route does not shadow the existing integer /products/<id> route",Low,2,improvement,api
+804,8,Story,Add the product_images table,"As a seller I want multiple images per product so that buyers can see it properly.
+
+Acceptance criteria:
+- product_images table with product_id, image_url, is_primary, sort_order and is_active
+- A partial unique index enforces at most one primary image per product
+- Modelled as a one-to-many table, not a JSON column, so images stay queryable and orderable
+
+Notes:
+- URL storage only, consistent with avatar_url in ticket 701. No file upload.",Medium,3,improvement,database
+805,8,Story,Add product image management endpoints,"As a seller I want to add, reorder and remove product images so that I control the gallery.
+
+Acceptance criteria:
+- POST, PATCH and DELETE nested under /api/v1/products/<id>/images
+- Only the owning seller or an admin may modify images
+- The first image added becomes primary automatically
+- Product detail returns images ordered by sort_order with the primary first",Medium,5,improvement,api
+806,8,Story,Refactor product-by-category into a nested multi-parameter route,"As a client I want a nested category route so that the resource hierarchy is explicit in the URL.
+
+Acceptance criteria:
+- GET /api/v1/categories/<category_id>/products lists active products in that category
+- GET /api/v1/categories/<category_id>/products/<product_id> returns the product, and 404s if it does not belong to that category
+- A missing category returns 404 rather than an empty list
+- The flat /products?category_id= filter keeps working for general search
+
+Notes:
+- Complements ticket 303 rather than replacing it. 303 satisfies the rubric; this adds the nested addressing.",Medium,3,improvement,api
+807,8,Story,Extend product filtering and sorting,"As a buyer I want richer filters so that I can narrow a large catalog.
+
+Acceptance criteria:
+- New filters: seller (user_id), in_stock, and exact slug match
+- The sort_by whitelist is extended
+- Combined filters compose correctly
+- Swagger documents every new parameter
+
+Notes:
+- SCOPE CORRECTION: name, category_id, min_price, max_price, sort_by, order, page and limit are ALREADY implemented in routes/products.py. This ticket is only the additions. The unknown-sort_by fallback bug is fixed in ticket 506.",Low,3,improvement,api
+901,9,Story,Define and enforce the order status transition state machine,"As a product owner I want illegal status changes rejected so that order state stays trustworthy.
+
+Acceptance criteria:
+- An explicit allowed-transitions map lives in one place
+- waiting_for_payment to processing or cancelled
+- processing to shipped or cancelled
+- shipped to delivered
+- delivered and cancelled are terminal with no outgoing transitions
+- Any transition outside the map returns 409 naming the current and requested status
+- One helper enforces the map and is reused by every status-changing endpoint
+
+Notes:
+- ck_orders_status_valid already restricts the set of values. It does not restrict movement between them.",Medium,5,improvement,orders
+902,9,Story,Restrict order updates to status only,"As a product owner I want quantity locked once an order is placed so that stock accounting cannot drift.
+
+Acceptance criteria:
+- PATCH /api/v1/orders/<id> accepts status only
+- Attempting to change quantity, items, total_amount or user_id returns 422 naming the forbidden field
+- Rejection happens at the schema layer, not through ad-hoc handler checks
+- Permitted transitions are exactly those from ticket 901",Medium,3,improvement,orders
+903,9,Story,Add order cancellation with idempotent stock restore,"As a buyer I want to cancel an unshipped order and have stock returned so that inventory stays correct.
+
+Acceptance criteria:
+- POST /api/v1/orders/<id>/cancel is allowed only from waiting_for_payment or processing
+- Every line item's quantity is added back to product stock
+- The restore and the status change share one transaction
+- Cancelling an already-cancelled order returns 409 and does NOT restore stock again
+- A test asserts stock is unchanged after a double-cancel attempt
+
+Notes:
+- Without a status guard inside the transaction, two concurrent cancels refund stock twice.
+- Keep consistent with the delete stock policy decided in ticket 207.",Medium,5,improvement,orders
+904,9,Story,Add a payment-success endpoint advancing the order to processing,"As a buyer I want a successful payment to move my order forward automatically so that I am not waiting on manual review.
+
+Acceptance criteria:
+- POST /api/v1/orders/<id>/payment transitions waiting_for_payment to processing
+- Idempotent: repeating the call on an already-processing order returns 200 with no side effects
+- Calling it on a cancelled or shipped order returns 409
+- A paid_at timestamp is recorded
+
+Notes:
+- SECURITY CAVEAT: this is a simulated gateway, so a buyer can mark their own order paid without paying. Acceptable for a learning project, but write the limitation into the README so it reads as a known tradeoff rather than an oversight.",Medium,3,improvement,orders
+905,9,Story,Add seller fulfilment transitions for shipped and delivered,"As a seller I want to mark orders shipped and delivered so that buyers can track fulfilment.
+
+Acceptance criteria:
+- processing to shipped is restricted to the related seller or an admin
+- shipped to delivered is allowed for the buyer confirming receipt, or an admin
+- A buyer cannot mark their own order shipped
+- Transitions reuse the state machine from ticket 901
+
+Notes:
+- Depends on the decision in ticket 1003 for what 'the related seller' means.",Low,3,improvement,orders
+906,9,Story,Add filtering and sorting to the order list,"As a buyer or seller I want to filter and sort orders so that I can find the ones I care about.
+
+Acceptance criteria:
+- Filters: status, ordered_at date range, min_total and max_total
+- Sorting by ordered_at, total_amount and status, ascending or descending
+- Pagination matching the product list response shape
+- Filters respect scoping: buyers see only their own orders, sellers only orders touching their products",Medium,3,improvement,orders
+907,9,Story,Snapshot the shipping address onto the order,"As a buyer I want my order to keep the address it was placed with so that later edits do not rewrite history.
+
+Acceptance criteria:
+- Orders capture the shipping address at creation, either by copying the fields or via an immutable snapshot row
+- Editing or soft-deleting a user address does not change any existing order
+- Order detail returns the address as it was at purchase
+- A test edits an address after ordering and asserts the order is unchanged
+
+Notes:
+- GAP not in the original plan. Storing only an address_id means a user editing their address silently changes where past orders 'were' shipped.
+- Depends on epic 7.",Medium,3,improvement,orders
+1001,10,Story,Restrict product mutation and deletion to the owning seller or admin,"As a seller I want only my own products editable by me so that other sellers cannot tamper with my listings.
+
+Acceptance criteria:
+- PUT and DELETE on a product require the caller to be the owning seller or an admin
+- Another seller receives 403; an anonymous caller receives 401
+- Ownership is read from products.user_id, never from the request body
+- Buyers cannot create or modify products at all
+
+Notes:
+- Depends on 801 for the ownership column. The identity and decorators it needs already exist from epic 1.",Medium,3,improvement,auth
+1002,10,Story,Extend order permissions to the related seller,"As a seller I want visibility and rights over orders containing my products so that I can manage fulfilment.
+
+Acceptance criteria:
+- The related seller, and an admin, may view and delete an order in addition to the buyer who placed it
+- Everyone else still receives 404
+- Deletion stays a soft delete, consistent with ticket 207
+- 'Related seller' follows the definition agreed in ticket 1003
+
+Notes:
+- BLOCKED BY 1003. For a mixed-seller order, 'the related seller' is undefined.
+- Buyer-scoping already shipped in tickets 206 and 207, so this is purely the seller extension.",Medium,3,improvement,auth
+1003,10,Task,Decide the multi-seller order policy,"As a team we need to agree whether one order may contain products from several sellers, because the answer changes both the data model and the permission rules.
+
+Options:
+- A: restrict an order to one seller, splitting a mixed cart into several orders
+- B: allow mixed orders but scope seller permissions to their own line items only
+- C: allow mixed orders and give sellers no order-level rights at all
+
+Acceptance criteria:
+- The decision and its rationale are recorded
+- Impact on tickets 905 and 1002 is noted
+- Any resulting schema change is raised as a follow-up ticket
+
+Notes:
+- BLOCKS 1002. The rule 'sellers may delete related orders' has no meaning for an order spanning two sellers.",Medium,2,improvement,spike
+1101,11,Story,Make stock decrement concurrency-safe,"As a data owner I want stock decrements safe under concurrent orders so that we cannot oversell.
+
+Acceptance criteria:
+- The decrement uses either SELECT FOR UPDATE on the product rows or a conditional UPDATE checking the affected row count
+- Two concurrent orders for the last unit produce exactly one success and one 409
+- A partial failure leaves no stock change and no order rows
+- A test simulates concurrent requests and asserts stock never goes negative
+
+Notes:
+- The MVP implementation in ticket 204 uses a read-then-write, which oversells under concurrency. This ticket hardens it.
+- Conditional form: UPDATE products SET stock = stock - :qty WHERE id = :id AND stock >= :qty, then check rowcount.
+- Highest priority of the improvement tier: it is a correctness bug, not a feature.",High,5,improvement,database
+1102,11,Story,Add a non-negative stock CHECK constraint to products,"As a data owner I want the database to reject negative stock so that a bug in the order path cannot corrupt inventory.
+
+Acceptance criteria:
+- CHECK constraint ck_products_stock_non_negative added by migration
+- Any attempt to drive stock below zero raises an IntegrityError the order path surfaces as 409
+- Existing rows are verified non-negative before the constraint is applied
+
+Notes:
+- products has only ck_products_price_non_negative today, so nothing stops negative stock at the database level.",High,2,improvement,database
+1103,11,Task,Review the migration chain and test every downgrade,"As a developer I want migrations to form a clean linear chain so that setup and rollback are reliable.
+
+Acceptance criteria:
+- All migrations form one chain with no branch points
+- flask db upgrade succeeds from an empty database
+- Every migration has a working downgrade, verified by upgrade, downgrade, upgrade
+- Data-backfilling migrations (order items, roles, slugs, product ownership) are each verified against seeded data",Medium,3,improvement,database
