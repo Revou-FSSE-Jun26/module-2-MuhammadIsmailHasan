@@ -3,7 +3,7 @@ from flasgger import Flasgger
 from flask_migrate import Migrate
 from helper.utils import db
 from config import SWAGGER_CONFIG
-from models import User, Product, Category, Order
+from models import User, Product, Category, Order, OrderItem
 from routes import register_routes
 from errors import register_error_handlers
 from flask_jwt_extended import JWTManager

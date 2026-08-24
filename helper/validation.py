@@ -105,3 +105,48 @@ def validation_users_data(data, required_all=True):
             return "user role must be buyer or seller only", 400
     
     return None, None
+
+
+def validation_order_data(data):
+    items = data.get('items')
+
+    if items is None:
+        return "items is required", 400
+    if not isinstance(items, list):
+        return "items must be a list", 400
+    if len(items) == 0:
+        return "items cannot be empty", 400
+
+    for i, item in enumerate(items):
+        if not isinstance(item, dict):
+            return f"item at index {i} must be an object", 400
+
+        product_id = item.get('product_id')
+        quantity = item.get('quantity')
+
+        if product_id is None:
+            return f"product_id is required for item at index {i}", 400
+        if not isinstance(product_id, int) or isinstance(product_id, bool):
+            return f"product_id must be a number for item at index {i}", 400
+
+        if quantity is None:
+            return f"quantity is required for item at index {i}", 400
+        if not isinstance(quantity, int) or isinstance(quantity, bool):
+            return f"quantity must be a number for item at index {i}", 400
+        if quantity <= 0:
+            return f"quantity must be greater than 0 for item at index {i}", 400
+
+    return None, None
+
+
+def validation_order_status(data):
+    status = data.get('status')
+
+    if status is None:
+        return "status is required", 400
+
+    valid_statuses = ('waiting_for_payment', 'processing', 'shipped', 'delivered', 'cancelled')
+    if status not in valid_statuses:
+        return f"status must be one of: {', '.join(valid_statuses)}", 400
+
+    return None, None
