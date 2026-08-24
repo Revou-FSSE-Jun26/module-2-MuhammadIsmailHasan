@@ -139,7 +139,18 @@ def validation_order_data(data):
     return None, None
 
 
-def validation_order_status(data):
+ALLOWED_TRANSITIONS = {
+    'waiting_for_payment': ['processing', 'cancelled'],
+    'processing': ['shipped', 'cancelled'],
+    'shipped': ['delivered'],
+    'delivered': [],
+    'cancelled': [],
+}
+
+UNDELETABLE_STATUSES = ('shipped', 'delivered')
+
+
+def validation_order_status(data, current_status=None):
     status = data.get('status')
 
     if status is None:
@@ -148,5 +159,17 @@ def validation_order_status(data):
     valid_statuses = ('waiting_for_payment', 'processing', 'shipped', 'delivered', 'cancelled')
     if status not in valid_statuses:
         return f"status must be one of: {', '.join(valid_statuses)}", 400
+
+    if current_status is not None:
+        allowed = ALLOWED_TRANSITIONS.get(current_status, [])
+        if status not in allowed:
+            return f"cannot change status from '{current_status}' to '{status}'", 400
+
+    return None, None
+
+
+def validation_delete_order(current_status):
+    if current_status in UNDELETABLE_STATUSES:
+        return f"cannot delete order with status '{current_status}'", 400
 
     return None, None

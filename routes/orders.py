@@ -3,7 +3,7 @@ from flask_jwt_extended import get_jwt_identity, get_jwt
 from models.orders import Order, OrderItem
 from models.products import Product
 from helper.utils import db
-from helper.validation import validation_order_data, validation_order_status
+from helper.validation import validation_order_data, validation_order_status, validation_delete_order
 from helper.auth import roles_required
 from decimal import Decimal
 
@@ -243,6 +243,12 @@ def get_orders():
         required: false
         enum: [waiting_for_payment, processing, shipped, delivered, cancelled]
         description: Filter by order status
+      - name: include_deleted
+        in: query
+        type: string
+        required: false
+        enum: [true, false]
+        description: Include deleted orders (default false)
       - name: sort_by
         in: query
         type: string
@@ -329,10 +335,14 @@ def get_orders():
         current_user_id = int(get_jwt_identity())
         role = claims.get('role')
 
-        query = Order.query.filter_by(is_active=True)
+        query = Order.query
 
         if role != 'admin':
             query = query.filter_by(user_id=current_user_id)
+
+        include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
+        if not include_deleted:
+            query = query.filter_by(is_active=True)
 
         status_filter = request.args.get('status')
         if status_filter:
@@ -381,7 +391,7 @@ def get_orders():
 @orders_bp.route('/<int:order_id>', methods=['GET'])
 @roles_required('buyer', 'seller', 'admin')
 def get_order(order_id):
-    """Get order detail by ID.
+    """Get order detail by ID (includes deleted/cancelled orders).
     ---
     tags:
       - Orders
@@ -488,7 +498,7 @@ def get_order(order_id):
         current_user_id = int(get_jwt_identity())
         role = claims.get('role')
 
-        order = Order.query.filter_by(id=order_id, is_active=True).first()
+        order = Order.query.filter_by(id=order_id).first()
 
         if not order:
             return jsonify({
@@ -519,7 +529,7 @@ def get_order(order_id):
 @orders_bp.route('/<int:order_id>', methods=['PUT'])
 @roles_required('buyer', 'admin')
 def update_order_status(order_id):
-    """Update order status.
+    """Update order status (must follow valid transitions: waiting_for_payment -> processing -> shipped -> delivered).
     ---
     tags:
       - Orders
@@ -643,7 +653,7 @@ def update_order_status(order_id):
             'status': False
         }), 400
 
-    error_message, error_code = validation_order_status(data)
+    error_message, error_code = validation_order_status(data, current_status=order.status)
     if error_message is not None:
         return jsonify({
             'message': error_message,
@@ -672,7 +682,7 @@ def update_order_status(order_id):
 @orders_bp.route('/<int:order_id>', methods=['DELETE'])
 @roles_required('buyer', 'admin')
 def delete_order(order_id):
-    """Delete an order (soft-delete).
+    """Cancel/delete an order. Blocked for shipped/delivered. Restores stock for waiting_for_payment/processing.
     ---
     tags:
       - Orders
@@ -686,16 +696,39 @@ def delete_order(order_id):
         description: The ID of the order to delete
     responses:
       200:
-        description: Order deleted successfully
+        description: Order cancelled/deleted successfully
         schema:
           type: object
           properties:
             message:
               type: string
-              example: success delete order
+              example: order cancelled successfully
             status:
               type: boolean
               example: true
+            data:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1
+                status:
+                  type: string
+                  example: cancelled
+                refund_note:
+                  type: string
+                  example: payment refund will be processed
+      400:
+        description: Cannot delete order with current status
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "cannot delete order with status 'shipped'"
+            status:
+              type: boolean
+              example: false
       403:
         description: Not allowed to delete this order
         schema:
@@ -749,13 +782,42 @@ def delete_order(order_id):
                 'status': False
             }), 403
 
-        order.is_active = False
+        error_message, error_code = validation_delete_order(order.status)
+        if error_message is not None:
+            return jsonify({
+                'message': error_message,
+                'status': False
+            }), error_code
+
+        refund_note = None
+
+        if order.status == 'cancelled':
+            order.is_active = False
+        elif order.status in ('waiting_for_payment', 'processing'):
+            if order.status == 'processing':
+                refund_note = 'payment refund will be processed'
+            order.status = 'cancelled'
+            order.is_active = False
+            for item in order.items:
+                product = Product.query.get(item.product_id)
+                if product:
+                    product.stock += item.quantity
+
         db.session.commit()
 
-        return jsonify({
-            'message': 'success delete order',
-            'status': True
-        }), 200
+        response_data = {
+            'message': 'order cancelled successfully',
+            'status': True,
+            'data': {
+                'id': order.id,
+                'status': order.status
+            }
+        }
+
+        if refund_note:
+            response_data['data']['refund_note'] = refund_note
+
+        return jsonify(response_data), 200
 
     except Exception:
         db.session.rollback()
