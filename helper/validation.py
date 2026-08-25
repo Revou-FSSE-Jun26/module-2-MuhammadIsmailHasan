@@ -148,6 +148,7 @@ ALLOWED_TRANSITIONS = {
 }
 
 UNDELETABLE_STATUSES = ('shipped', 'delivered')
+ACTIVE_ORDER_STATUSES = ('waiting_for_payment', 'processing', 'shipped')
 
 
 def validation_order_status(data, current_status=None):

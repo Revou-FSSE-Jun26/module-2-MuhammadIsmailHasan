@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 from models.products import Product
 from models.orders import Order, OrderItem
 from helper.utils import db
-from helper.validation import validation_products_data
+from helper.validation import validation_products_data, ACTIVE_ORDER_STATUSES
 from helper.auth import roles_required
 
 products_bp = Blueprint('products', __name__, url_prefix='/products')
@@ -650,7 +650,7 @@ def delete_product(product_id):
     ).filter(
         OrderItem.product_id == product_id,
         Order.is_active == True,
-        Order.status.in_(['waiting_for_payment', 'processing', 'shipped'])
+        Order.status.in_(ACTIVE_ORDER_STATUSES)
     ).first()
 
     if active_order_exists:
