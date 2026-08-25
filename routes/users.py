@@ -143,13 +143,13 @@ def register_user():
         db.session.rollback()
         current_app.logger.warning('integrity error on user registration: %s', e)
 
-        error_message = str(e).lower()
-        if 'username' in error_message:
+        error_info = str(e.orig).lower() if e.orig else str(e).lower()
+        if 'username' in error_info:
             return jsonify({
                 'message': 'username already exists',
                 'status': False
             }), 409
-        elif 'email' in error_message:
+        elif 'email' in error_info:
             return jsonify({
                 'message': 'email already exists',
                 'status': False
