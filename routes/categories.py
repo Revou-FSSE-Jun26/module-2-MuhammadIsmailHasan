@@ -1,4 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError, DataError
 from models.categories import Category
 from helper.utils import db
 from helper.validation import validation_category_data
@@ -111,7 +112,7 @@ def get_categories():
                 total_pages:
                   type: integer
                   example: 1
-      404:
+      500:
         description: Failed to get categories
         schema:
           type: object
@@ -123,39 +124,39 @@ def get_categories():
               type: boolean
               example: false
     """
+    query = Category.query.filter_by(is_active=True)
+
+    name = request.args.get('name')
+    if name:
+        query = query.filter(Category.name.ilike(f'%{name}%'))
+
+    sort_by = request.args.get('sort_by', 'id')
+    order = request.args.get('order', 'asc')
+
+    sort_columns = {
+        'id': Category.id,
+        'name': Category.name,
+        'created_at': Category.created_at
+    }
+    sort_column = sort_columns.get(sort_by, Category.name)
+
+    if order == 'desc':
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column.asc())
+
+    page = request.args.get('page', 1, type=int)
+    limit = request.args.get('limit', 10, type=int)
+
     try:
-        query = Category.query.filter_by(is_active=True)
-        
-        name = request.args.get('name')
-        if name:
-            query = query.filter(Category.name.ilike(f'%{name}%'))
-        
-        sort_by = request.args.get('sort_by', 'id')
-        order = request.args.get('order', 'asc')
-        
-        sort_columns = {
-            'id': Category.id,
-            'name': Category.name,
-            'created_at': Category.created_at
-        }
-        sort_column = sort_columns.get(sort_by, Category.name)
-        
-        if order == 'desc':
-            query = query.order_by(sort_column.desc())
-        else:
-            query = query.order_by(sort_column.asc())
-        
-        page = request.args.get('page', 1, type=int)
-        limit = request.args.get('limit', 10, type=int)
-        
         paginated = query.paginate(page=page, per_page=limit, error_out=False)
-        
+
         with_products = request.args.get('with_products', 'false').lower() == 'true'
-        if with_products :
-          data = [category.to_dict_with_products() for category in paginated.items] 
-        else :
-          data = [category.to_dict() for category in paginated.items]
-        
+        if with_products:
+            data = [category.to_dict_with_products() for category in paginated.items]
+        else:
+            data = [category.to_dict() for category in paginated.items]
+
         return jsonify({
             'message': 'get all categories success',
             'status': True,
@@ -167,13 +168,20 @@ def get_categories():
                 'total_pages': paginated.pages
             }
         }), 200
-            
-    except Exception as e:
+
+    except OperationalError as e:
+        current_app.logger.error('operational error getting categories: %s', e)
+        return jsonify({
+            'message': 'failed get all categories: database connection issue',
+            'status': False
+        }), 503
+
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error getting categories: %s', e)
         return jsonify({
             'message': 'failed get all categories',
-            'status': False,
-            'error': str(e)
-        }), 404
+            'status': False
+        }), 500
 
 
 @categories_bp.route('/', methods=['POST'])
@@ -286,7 +294,21 @@ def create_category():
 
     name = data.get('name').strip()
 
-    existing = Category.query.filter_by(name=name, is_active=True).first()
+    try:
+        existing = Category.query.filter_by(name=name, is_active=True).first()
+    except OperationalError as e:
+        current_app.logger.error('operational error creating category: %s', e)
+        return jsonify({
+            'message': 'failed to create category: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error creating category: %s', e)
+        return jsonify({
+            'message': 'failed to create category',
+            'status': False
+        }), 500
+
     if existing:
         return jsonify({
             'message': 'category name already exists',
@@ -305,9 +327,33 @@ def create_category():
             'data': category.to_dict()
         }), 201
 
-    except Exception:
+    except IntegrityError as e:
         db.session.rollback()
-        current_app.logger.exception('failed to create category')
+        current_app.logger.error('integrity error creating category: %s', e)
+        return jsonify({
+            'message': 'failed to create category: data integrity violation',
+            'status': False
+        }), 422
+
+    except DataError as e:
+        db.session.rollback()
+        current_app.logger.error('data error creating category: %s', e)
+        return jsonify({
+            'message': 'failed to create category: invalid data format',
+            'status': False
+        }), 422
+
+    except OperationalError as e:
+        db.session.rollback()
+        current_app.logger.error('operational error creating category: %s', e)
+        return jsonify({
+            'message': 'failed to create category: database connection issue',
+            'status': False
+        }), 503
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error('database error creating category: %s', e)
         return jsonify({
             'message': 'failed to create category',
             'status': False
@@ -398,25 +444,30 @@ def get_category(category_id):
     """
     try:
         category = Category.query.filter_by(id=category_id, is_active=True).first()
-
-        if not category:
-            return jsonify({
-                'message': 'category not found',
-                'status': False
-            }), 404
-
+    except OperationalError as e:
+        current_app.logger.error('operational error getting category %s: %s', category_id, e)
         return jsonify({
-            'message': 'success get category',
-            'status': True,
-            'data': category.to_dict_with_products()
-        }), 200
-
-    except Exception:
-        current_app.logger.exception('failed to get category %s', category_id)
+            'message': 'failed to get category: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error getting category %s: %s', category_id, e)
         return jsonify({
             'message': 'failed to get category',
             'status': False
         }), 500
+
+    if not category:
+        return jsonify({
+            'message': 'category not found',
+            'status': False
+        }), 404
+
+    return jsonify({
+        'message': 'success get category',
+        'status': True,
+        'data': category.to_dict_with_products()
+    }), 200
 
 
 @categories_bp.route('/<int:category_id>', methods=['PUT'])
@@ -527,7 +578,20 @@ def update_category(category_id):
               type: boolean
               example: false
     """
-    category = Category.query.filter_by(id=category_id, is_active=True).first()
+    try:
+        category = Category.query.filter_by(id=category_id, is_active=True).first()
+    except OperationalError as e:
+        current_app.logger.error('operational error updating category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to update category: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error updating category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to update category',
+            'status': False
+        }), 500
 
     if not category:
         return jsonify({
@@ -574,9 +638,33 @@ def update_category(category_id):
             'data': category.to_dict()
         }), 200
 
-    except Exception:
+    except IntegrityError as e:
         db.session.rollback()
-        current_app.logger.exception('failed to update category %s', category_id)
+        current_app.logger.error('integrity error updating category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to update category: data integrity violation',
+            'status': False
+        }), 422
+
+    except DataError as e:
+        db.session.rollback()
+        current_app.logger.error('data error updating category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to update category: invalid data format',
+            'status': False
+        }), 422
+
+    except OperationalError as e:
+        db.session.rollback()
+        current_app.logger.error('operational error updating category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to update category: database connection issue',
+            'status': False
+        }), 503
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error('database error updating category %s: %s', category_id, e)
         return jsonify({
             'message': 'failed to update category',
             'status': False
@@ -635,13 +723,26 @@ def delete_category(category_id):
     """
     try:
         category = Category.query.filter_by(id=category_id, is_active=True).first()
+    except OperationalError as e:
+        current_app.logger.error('operational error deleting category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to delete category: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error deleting category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to delete category',
+            'status': False
+        }), 500
 
-        if not category:
-            return jsonify({
-                'message': 'category not found',
-                'status': False
-            }), 404
+    if not category:
+        return jsonify({
+            'message': 'category not found',
+            'status': False
+        }), 404
 
+    try:
         category.is_active = False
         db.session.commit()
 
@@ -650,9 +751,25 @@ def delete_category(category_id):
             'status': True
         }), 200
 
-    except Exception:
+    except IntegrityError as e:
         db.session.rollback()
-        current_app.logger.exception('failed to delete category %s', category_id)
+        current_app.logger.error('integrity error deleting category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to delete category: data integrity violation',
+            'status': False
+        }), 422
+
+    except OperationalError as e:
+        db.session.rollback()
+        current_app.logger.error('operational error deleting category %s: %s', category_id, e)
+        return jsonify({
+            'message': 'failed to delete category: database connection issue',
+            'status': False
+        }), 503
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error('database error deleting category %s: %s', category_id, e)
         return jsonify({
             'message': 'failed to delete category',
             'status': False

@@ -1,11 +1,10 @@
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError, DataError
 from models.users import User
 from helper.utils import db
-from sqlalchemy.exc import IntegrityError
 from helper.validation import validation_users_data
-from helper.auth import hash_password
-from helper.auth import roles_required
+from helper.auth import hash_password, roles_required
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
 
@@ -109,12 +108,11 @@ def register_user():
               type: boolean
               example: false
     """
-
     data = request.get_json(silent=True, force=True)
     if not data:
         return jsonify({
-            "message": "body request must be valid JSON format or cannot be empty",
-            "status": False
+            'message': 'body request must be valid JSON format or cannot be empty',
+            'status': False
         }), 400
 
     error_message, error_code = validation_users_data(data, True)
@@ -141,33 +139,48 @@ def register_user():
             'data': new_user.to_dict()
         }), 201
 
-    except IntegrityError as error:
+    except IntegrityError as e:
         db.session.rollback()
-        current_app.logger.warning('integrity error on user registration: %s', error)
+        current_app.logger.warning('integrity error on user registration: %s', e)
 
-        error_message = str(error).lower()
+        error_message = str(e).lower()
         if 'username' in error_message:
             return jsonify({
-                'message': "username already exists",
+                'message': 'username already exists',
                 'status': False
             }), 409
         elif 'email' in error_message:
             return jsonify({
-                'message': "email already exists",
+                'message': 'email already exists',
                 'status': False
             }), 409
         else:
             return jsonify({
-                'message': "failed to create user",
+                'message': 'failed to create user: data integrity violation',
                 'status': False
             }), 409
 
-    except Exception:
+    except DataError as e:
         db.session.rollback()
-        current_app.logger.exception('failed to create user')
-
+        current_app.logger.error('data error on user registration: %s', e)
         return jsonify({
-            'message': "failed to create user",
+            'message': 'failed to create user: invalid data format',
+            'status': False
+        }), 422
+
+    except OperationalError as e:
+        db.session.rollback()
+        current_app.logger.error('operational error on user registration: %s', e)
+        return jsonify({
+            'message': 'failed to create user: database connection issue',
+            'status': False
+        }), 503
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error('database error on user registration: %s', e)
+        return jsonify({
+            'message': 'failed to create user',
             'status': False
         }), 500
 
@@ -239,15 +252,29 @@ def get_user_account():
     """
     current_user_id = get_jwt_identity()
 
-    user = User.query.filter_by(id=current_user_id, is_active=True).first()
+    try:
+        user = User.query.filter_by(id=current_user_id, is_active=True).first()
+    except OperationalError as e:
+        current_app.logger.error('operational error getting user account: %s', e)
+        return jsonify({
+            'message': 'failed to get user data: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error getting user account: %s', e)
+        return jsonify({
+            'message': 'failed to get user data',
+            'status': False
+        }), 500
+
     if user is None:
         return jsonify({
-            'message': "user data not found",
+            'message': 'user data not found',
             'status': False
         }), 404
 
     return jsonify({
-        'message': "get user data successful",
+        'message': 'get user data successful',
         'status': True,
         'data': user.to_dict()
     }), 200
@@ -325,23 +352,30 @@ def get_user(user_id):
     """
     try:
         user = User.query.filter_by(id=user_id, is_active=True).first()
-        if user:
-            return jsonify({
-                'message': 'success get user data',
-                'status': True,
-                'data': user.to_dict_public()
-            }), 200
-        else:
-            return jsonify({
-                'message': "user data not found",
-                'status': False,
-            }), 404
-    except Exception:
-        current_app.logger.exception('failed to get user %s', user_id)
+    except OperationalError as e:
+        current_app.logger.error('operational error getting user %s: %s', user_id, e)
         return jsonify({
-            'message': "failed to get user data",
+            'message': 'failed to get user data: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error getting user %s: %s', user_id, e)
+        return jsonify({
+            'message': 'failed to get user data',
             'status': False
         }), 500
+
+    if not user:
+        return jsonify({
+            'message': 'user data not found',
+            'status': False
+        }), 404
+
+    return jsonify({
+        'message': 'success get user data',
+        'status': True,
+        'data': user.to_dict_public()
+    }), 200
 
 
 @users_bp.route('/<int:user_id>', methods=['DELETE'])
@@ -416,36 +450,66 @@ def delete_user(user_id):
               type: boolean
               example: false
     """
+    claims = get_jwt()
+    current_user_id = int(get_jwt_identity())
+    role = claims.get('role')
+
+    if role != 'admin' and current_user_id != user_id:
+        return jsonify({
+            'message': "you don't have permission to delete this user",
+            'status': False
+        }), 403
+
     try:
-        claims = get_jwt()
-        current_user_id = int(get_jwt_identity())
-        role = claims.get('role')
-
-        if role != 'admin' and current_user_id != user_id:
-            return jsonify({
-                'message': "you don't have permission to delete this user",
-                'status': False,
-            }), 403
-
         user = User.query.filter_by(id=user_id, is_active=True).first()
+    except OperationalError as e:
+        current_app.logger.error('operational error deleting user %s: %s', user_id, e)
+        return jsonify({
+            'message': 'failed to delete user: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error deleting user %s: %s', user_id, e)
+        return jsonify({
+            'message': 'failed to delete user',
+            'status': False
+        }), 500
 
-        if not user:
-            return jsonify({
-                'message': "user not found",
-                'status': False,
-            }), 404
+    if not user:
+        return jsonify({
+            'message': 'user not found',
+            'status': False
+        }), 404
 
+    try:
         user.is_active = False
         db.session.commit()
 
         return jsonify({
             'message': 'success delete user',
-            'status': True,
+            'status': True
         }), 200
-    except Exception:
+
+    except IntegrityError as e:
         db.session.rollback()
-        current_app.logger.exception('failed to delete user %s', user_id)
+        current_app.logger.error('integrity error deleting user %s: %s', user_id, e)
         return jsonify({
-            'message': "failed to delete user",
+            'message': 'failed to delete user: data integrity violation',
+            'status': False
+        }), 422
+
+    except OperationalError as e:
+        db.session.rollback()
+        current_app.logger.error('operational error deleting user %s: %s', user_id, e)
+        return jsonify({
+            'message': 'failed to delete user: database connection issue',
+            'status': False
+        }), 503
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error('database error deleting user %s: %s', user_id, e)
+        return jsonify({
+            'message': 'failed to delete user',
             'status': False
         }), 500
