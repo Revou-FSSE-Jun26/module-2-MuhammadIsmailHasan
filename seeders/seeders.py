@@ -5,14 +5,16 @@ Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()
 
 from app import app
 from helper.utils import db
-from models import User, Product, Category
+from models import User, Product, Category, Order, OrderItem
 import bcrypt
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 def clear_tables():
     """Hapus semua data dari table untuk testing fresh"""
     try:
-        # Delete in order to respect foreign key constraints
+        db.session.query(OrderItem).delete()
+        db.session.query(Order).delete()
         db.session.query(Product).delete()
         db.session.query(User).delete()
         db.session.query(Category).delete()
@@ -213,6 +215,103 @@ def seed_products():
         raise
 
 
+def seed_orders():
+    """Seed orders dengan berbagai status untuk testing"""
+    buyer = User.query.filter_by(username='jane_smith').first()
+    buyer2 = User.query.filter_by(username='bob_wilson').first()
+    products = Product.query.limit(5).all()
+
+    if not buyer or not buyer2 or len(products) < 3:
+        print("✗ Cannot seed orders: missing users or products")
+        return
+
+    orders_data = [
+        {
+            'user': buyer,
+            'status': 'waiting_for_payment',
+            'items': [
+                {'product': products[0], 'quantity': 1},
+                {'product': products[1], 'quantity': 2},
+            ]
+        },
+        {
+            'user': buyer,
+            'status': 'processing',
+            'items': [
+                {'product': products[2], 'quantity': 1},
+            ]
+        },
+        {
+            'user': buyer,
+            'status': 'shipped',
+            'items': [
+                {'product': products[3], 'quantity': 1},
+            ]
+        },
+        {
+            'user': buyer2,
+            'status': 'delivered',
+            'items': [
+                {'product': products[0], 'quantity': 2},
+                {'product': products[4], 'quantity': 1},
+            ]
+        },
+        {
+            'user': buyer2,
+            'status': 'cancelled',
+            'is_active': False,
+            'items': [
+                {'product': products[1], 'quantity': 3},
+            ]
+        },
+    ]
+
+    try:
+        for order_data in orders_data:
+            total_amount = Decimal('0')
+            items_to_add = []
+
+            for item in order_data['items']:
+                product = item['product']
+                quantity = item['quantity']
+                unit_price = product.price
+                sub_total = unit_price * quantity
+                total_amount += Decimal(str(float(sub_total)))
+                items_to_add.append({
+                    'product_id': product.id,
+                    'unit_price': unit_price,
+                    'quantity': quantity,
+                    'sub_total': sub_total
+                })
+
+            order = Order(
+                user_id=order_data['user'].id,
+                total_amount=total_amount,
+                status=order_data['status'],
+                is_active=order_data.get('is_active', True),
+                ordered_at=datetime.utcnow() - timedelta(days=len(orders_data))
+            )
+            db.session.add(order)
+            db.session.flush()
+
+            for item_data in items_to_add:
+                order_item = OrderItem(
+                    order_id=order.id,
+                    product_id=item_data['product_id'],
+                    unit_price=item_data['unit_price'],
+                    quantity=item_data['quantity'],
+                    sub_total=item_data['sub_total']
+                )
+                db.session.add(order_item)
+
+        db.session.commit()
+        print(f"✓ Created {len(orders_data)} orders")
+    except Exception as e:
+        db.session.rollback()
+        print(f"✗ Error seeding orders: {e}")
+        raise
+
+
 def seed_test_data():
     """Run all seeders"""
     with app.app_context():
@@ -225,6 +324,7 @@ def seed_test_data():
             seed_categories()
             seed_users()
             seed_products()
+            seed_orders()
             
             print("\n" + "="*50)
             print("✓ Test data seeding completed successfully!")
@@ -233,11 +333,16 @@ def seed_test_data():
             # Print summary
             print("Summary:")
             print(f"  Users: {User.query.count()}")
-            print(f"  Products: {Product.query.count()}")
             print(f"  Categories: {Category.query.count()}")
+            print(f"  Products: {Product.query.count()}")
+            print(f"  Orders: {Order.query.count()}")
+            print(f"  Order Items: {OrderItem.query.count()}")
             print("\nTest Users (untuk login testing):")
             for user in User.query.all():
                 print(f"  - {user.username} ({user.email}) - Role: {user.role}")
+            print("\nOrders:")
+            for order in Order.query.all():
+                print(f"  - Order #{order.id} | User: {order.user_id} | Status: {order.status} | Active: {order.is_active}")
             
         except Exception as e:
             print(f"\n✗ Seeding failed: {e}")
