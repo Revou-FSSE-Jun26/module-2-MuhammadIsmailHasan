@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError, DataError
 from models.products import Product
+from models.orders import Order, OrderItem
 from helper.utils import db
 from helper.validation import validation_products_data
 from helper.auth import roles_required
@@ -754,6 +755,33 @@ def delete_product(product_id):
             'status': False
         }), 404
 
+    try:
+        active_order_exists = db.session.query(OrderItem).join(
+            Order, OrderItem.order_id == Order.id
+        ).filter(
+            OrderItem.product_id == product_id,
+            Order.is_active == True,
+            Order.status.in_(['waiting_for_payment', 'processing', 'shipped'])
+        ).first()
+    except OperationalError as e:
+        current_app.logger.error('operational error deleting product %s: %s', product_id, e)
+        return jsonify({
+            'message': 'failed to delete product: database connection issue',
+            'status': False
+        }), 503
+    except SQLAlchemyError as e:
+        current_app.logger.error('database error deleting product %s: %s', product_id, e)
+        return jsonify({
+            'message': 'failed to delete product',
+            'status': False
+        }), 500
+
+    if active_order_exists:
+        return jsonify({
+            'message': 'cannot delete product: product has active orders',
+            'status': False
+        }), 400
+    
     try:
         product.is_active = False
         db.session.commit()
