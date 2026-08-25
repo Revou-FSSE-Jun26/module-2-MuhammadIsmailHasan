@@ -1,5 +1,4 @@
-from flask import Blueprint, jsonify, request, current_app
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError, DataError
+from flask import Blueprint, jsonify, request
 from models.products import Product
 from models.orders import Order, OrderItem
 from helper.utils import db
@@ -153,34 +152,19 @@ def get_products():
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 10, type=int)
 
-    try:
-        paginated = query.paginate(page=page, per_page=limit, error_out=False)
+    paginated = query.paginate(page=page, per_page=limit, error_out=False)
 
-        return jsonify({
-            'message': 'get all products success',
-            'status': True,
-            'data': [product.to_dict() for product in paginated.items],
-            'pagination': {
-                'page': paginated.page,
-                'limit': paginated.per_page,
-                'total_items': paginated.total,
-                'total_pages': paginated.pages
-            }
-        }), 200
-
-    except OperationalError as e:
-        current_app.logger.error('operational error getting products: %s', e)
-        return jsonify({
-            'message': 'failed get all products: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error getting products: %s', e)
-        return jsonify({
-            'message': 'failed get all products',
-            'status': False
-        }), 500
+    return jsonify({
+        'message': 'get all products success',
+        'status': True,
+        'data': [product.to_dict() for product in paginated.items],
+        'pagination': {
+            'page': paginated.page,
+            'limit': paginated.per_page,
+            'total_items': paginated.total,
+            'total_pages': paginated.pages
+        }
+    }), 200
 
 
 @products_bp.route('/', methods=['POST'])
@@ -309,55 +293,22 @@ def create_product():
             'status': False
         }), error_code
 
-    try:
-        product = Product(
-            name=data.get('name').strip(),
-            description=data.get('description'),
-            price=data.get('price'),
-            stock=data.get('stock', 0),
-            category_id=data.get('category_id')
-        )
+    product = Product(
+        name=data.get('name').strip(),
+        description=data.get('description'),
+        price=data.get('price'),
+        stock=data.get('stock', 0),
+        category_id=data.get('category_id')
+    )
 
-        db.session.add(product)
-        db.session.commit()
+    db.session.add(product)
+    db.session.commit()
 
-        return jsonify({
-            'message': 'product created',
-            'status': True,
-            'data': product.to_dict()
-        }), 201
-
-    except IntegrityError as e:
-        db.session.rollback()
-        current_app.logger.error('integrity error creating product: %s', e)
-        return jsonify({
-            'message': 'failed to create product: data integrity violation',
-            'status': False
-        }), 422
-
-    except DataError as e:
-        db.session.rollback()
-        current_app.logger.error('data error creating product: %s', e)
-        return jsonify({
-            'message': 'failed to create product: invalid data format',
-            'status': False
-        }), 422
-
-    except OperationalError as e:
-        db.session.rollback()
-        current_app.logger.error('operational error creating product: %s', e)
-        return jsonify({
-            'message': 'failed to create product: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error('database error creating product: %s', e)
-        return jsonify({
-            'message': 'failed to create product',
-            'status': False
-        }), 500
+    return jsonify({
+        'message': 'product created',
+        'status': True,
+        'data': product.to_dict()
+    }), 201
 
 
 @products_bp.route('/<int:product_id>', methods=['GET'])
@@ -449,20 +400,7 @@ def get_product(product_id):
               type: boolean
               example: false
     """
-    try:
-        product = Product.query.filter_by(id=product_id, is_active=True).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error getting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to get product: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error getting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to get product',
-            'status': False
-        }), 500
+    product = Product.query.filter_by(id=product_id, is_active=True).first()
 
     if not product:
         return jsonify({
@@ -590,20 +528,7 @@ def update_product(product_id):
               type: boolean
               example: false
     """
-    try:
-        product = Product.query.filter_by(id=product_id, is_active=True).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error updating product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to update product: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error updating product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to update product',
-            'status': False
-        }), 500
+    product = Product.query.filter_by(id=product_id, is_active=True).first()
 
     if not product:
         return jsonify({
@@ -642,52 +567,19 @@ def update_product(product_id):
     if category_id is not None:
         product.category_id = category_id
 
-    try:
-        db.session.commit()
+    db.session.commit()
 
-        return jsonify({
-            'message': 'success update product',
-            'status': True,
-            'data': product.to_dict()
-        }), 200
-
-    except IntegrityError as e:
-        db.session.rollback()
-        current_app.logger.error('integrity error updating product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to update product: data integrity violation',
-            'status': False
-        }), 422
-
-    except DataError as e:
-        db.session.rollback()
-        current_app.logger.error('data error updating product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to update product: invalid data format',
-            'status': False
-        }), 422
-
-    except OperationalError as e:
-        db.session.rollback()
-        current_app.logger.error('operational error updating product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to update product: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error('database error updating product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to update product',
-            'status': False
-        }), 500
+    return jsonify({
+        'message': 'success update product',
+        'status': True,
+        'data': product.to_dict()
+    }), 200
 
 
 @products_bp.route('/<int:product_id>', methods=['DELETE'])
 @roles_required('seller', 'admin')
 def delete_product(product_id):
-    """Delete a product (soft-delete).
+    """Delete a product (soft-delete). Blocked if product has active orders.
     ---
     tags:
       - Products
@@ -711,6 +603,17 @@ def delete_product(product_id):
             status:
               type: boolean
               example: true
+      400:
+        description: Product has active orders
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "cannot delete product: product has active orders"
+            status:
+              type: boolean
+              example: false
       404:
         description: Product not found
         schema:
@@ -734,20 +637,7 @@ def delete_product(product_id):
               type: boolean
               example: false
     """
-    try:
-        product = Product.query.filter_by(id=product_id, is_active=True).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error deleting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to delete product: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error deleting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to delete product',
-            'status': False
-        }), 500
+    product = Product.query.filter_by(id=product_id, is_active=True).first()
 
     if not product:
         return jsonify({
@@ -755,62 +645,24 @@ def delete_product(product_id):
             'status': False
         }), 404
 
-    try:
-        active_order_exists = db.session.query(OrderItem).join(
-            Order, OrderItem.order_id == Order.id
-        ).filter(
-            OrderItem.product_id == product_id,
-            Order.is_active == True,
-            Order.status.in_(['waiting_for_payment', 'processing', 'shipped'])
-        ).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error deleting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to delete product: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error deleting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to delete product',
-            'status': False
-        }), 500
+    active_order_exists = db.session.query(OrderItem).join(
+        Order, OrderItem.order_id == Order.id
+    ).filter(
+        OrderItem.product_id == product_id,
+        Order.is_active == True,
+        Order.status.in_(['waiting_for_payment', 'processing', 'shipped'])
+    ).first()
 
     if active_order_exists:
         return jsonify({
             'message': 'cannot delete product: product has active orders',
             'status': False
         }), 400
-    
-    try:
-        product.is_active = False
-        db.session.commit()
 
-        return jsonify({
-            'message': 'success delete product',
-            'status': True
-        }), 200
+    product.is_active = False
+    db.session.commit()
 
-    except IntegrityError as e:
-        db.session.rollback()
-        current_app.logger.error('integrity error deleting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to delete product: data integrity violation',
-            'status': False
-        }), 422
-
-    except OperationalError as e:
-        db.session.rollback()
-        current_app.logger.error('operational error deleting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to delete product: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error('database error deleting product %s: %s', product_id, e)
-        return jsonify({
-            'message': 'failed to delete product',
-            'status': False
-        }), 500
+    return jsonify({
+        'message': 'success delete product',
+        'status': True
+    }), 200

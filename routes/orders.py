@@ -1,6 +1,5 @@
-from flask import Blueprint, jsonify, request, current_app
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, get_jwt
-from sqlalchemy.exc import SQLAlchemyError, IntegrityError, OperationalError, DataError
 from models.orders import Order, OrderItem
 from models.products import Product
 from helper.utils import db
@@ -191,65 +190,31 @@ def create_order():
 
         total_amount += sub_total
 
-    try:
-        order = Order(
-            user_id=current_user_id,
-            total_amount=total_amount
+    order = Order(
+        user_id=current_user_id,
+        total_amount=total_amount
+    )
+    db.session.add(order)
+    db.session.flush()
+
+    for item_data in order_items:
+        order_item = OrderItem(
+            order_id=order.id,
+            product_id=item_data['product_id'],
+            unit_price=item_data['unit_price'],
+            quantity=item_data['quantity'],
+            sub_total=item_data['sub_total']
         )
-        db.session.add(order)
-        db.session.flush()
+        db.session.add(order_item)
+        item_data['product'].stock -= item_data['quantity']
 
-        for item_data in order_items:
-            order_item = OrderItem(
-                order_id=order.id,
-                product_id=item_data['product_id'],
-                unit_price=item_data['unit_price'],
-                quantity=item_data['quantity'],
-                sub_total=item_data['sub_total']
-            )
-            db.session.add(order_item)
+    db.session.commit()
 
-            item_data['product'].stock -= item_data['quantity']
-
-        db.session.commit()
-
-        return jsonify({
-            'message': 'order created',
-            'status': True,
-            'data': order.to_dict_detail()
-        }), 201
-
-    except IntegrityError as e:
-        db.session.rollback()
-        current_app.logger.error('integrity error creating order: %s', e)
-        return jsonify({
-            'message': 'failed to create order: data integrity violation',
-            'status': False
-        }), 422
-
-    except DataError as e:
-        db.session.rollback()
-        current_app.logger.error('data error creating order: %s', e)
-        return jsonify({
-            'message': 'failed to create order: invalid data format',
-            'status': False
-        }), 422
-
-    except OperationalError as e:
-        db.session.rollback()
-        current_app.logger.error('operational error creating order: %s', e)
-        return jsonify({
-            'message': 'failed to create order: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error('database error creating order: %s', e)
-        return jsonify({
-            'message': 'failed to create order',
-            'status': False
-        }), 500
+    return jsonify({
+        'message': 'order created',
+        'status': True,
+        'data': order.to_dict_detail()
+    }), 201
 
 
 @orders_bp.route('/', methods=['GET'])
@@ -390,34 +355,19 @@ def get_orders():
     page = request.args.get('page', 1, type=int)
     limit = request.args.get('limit', 10, type=int)
 
-    try:
-        paginated = query.paginate(page=page, per_page=limit, error_out=False)
+    paginated = query.paginate(page=page, per_page=limit, error_out=False)
 
-        return jsonify({
-            'message': 'get all orders success',
-            'status': True,
-            'data': [o.to_dict() for o in paginated.items],
-            'pagination': {
-                'page': paginated.page,
-                'limit': paginated.per_page,
-                'total_items': paginated.total,
-                'total_pages': paginated.pages
-            }
-        }), 200
-
-    except OperationalError as e:
-        current_app.logger.error('operational error getting orders: %s', e)
-        return jsonify({
-            'message': 'failed to get orders: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error getting orders: %s', e)
-        return jsonify({
-            'message': 'failed to get orders',
-            'status': False
-        }), 500
+    return jsonify({
+        'message': 'get all orders success',
+        'status': True,
+        'data': [o.to_dict() for o in paginated.items],
+        'pagination': {
+            'page': paginated.page,
+            'limit': paginated.per_page,
+            'total_items': paginated.total,
+            'total_pages': paginated.pages
+        }
+    }), 200
 
 
 @orders_bp.route('/<int:order_id>', methods=['GET'])
@@ -529,20 +479,7 @@ def get_order(order_id):
     current_user_id = int(get_jwt_identity())
     role = claims.get('role')
 
-    try:
-        order = Order.query.filter_by(id=order_id).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error getting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to get order: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error getting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to get order',
-            'status': False
-        }), 500
+    order = Order.query.filter_by(id=order_id).first()
 
     if not order:
         return jsonify({
@@ -669,20 +606,7 @@ def update_order_status(order_id):
     current_user_id = int(get_jwt_identity())
     role = claims.get('role')
 
-    try:
-        order = Order.query.filter_by(id=order_id, is_active=True).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error updating order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to update order: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error updating order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to update order',
-            'status': False
-        }), 500
+    order = Order.query.filter_by(id=order_id, is_active=True).first()
 
     if not order:
         return jsonify({
@@ -710,47 +634,14 @@ def update_order_status(order_id):
             'status': False
         }), error_code
 
-    try:
-        order.status = data.get('status')
-        db.session.commit()
+    order.status = data.get('status')
+    db.session.commit()
 
-        return jsonify({
-            'message': 'success update order status',
-            'status': True,
-            'data': order.to_dict()
-        }), 200
-
-    except IntegrityError as e:
-        db.session.rollback()
-        current_app.logger.error('integrity error updating order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to update order: data integrity violation',
-            'status': False
-        }), 422
-
-    except DataError as e:
-        db.session.rollback()
-        current_app.logger.error('data error updating order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to update order: invalid data format',
-            'status': False
-        }), 422
-
-    except OperationalError as e:
-        db.session.rollback()
-        current_app.logger.error('operational error updating order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to update order: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error('database error updating order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to update order',
-            'status': False
-        }), 500
+    return jsonify({
+        'message': 'success update order status',
+        'status': True,
+        'data': order.to_dict()
+    }), 200
 
 
 @orders_bp.route('/<int:order_id>', methods=['DELETE'])
@@ -841,20 +732,7 @@ def delete_order(order_id):
     current_user_id = int(get_jwt_identity())
     role = claims.get('role')
 
-    try:
-        order = Order.query.filter_by(id=order_id, is_active=True).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error deleting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to delete order: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error deleting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to delete order',
-            'status': False
-        }), 500
+    order = Order.query.filter_by(id=order_id, is_active=True).first()
 
     if not order:
         return jsonify({
@@ -889,51 +767,18 @@ def delete_order(order_id):
             if product:
                 product.stock += item.quantity
 
-    try:
-        db.session.commit()
+    db.session.commit()
 
-        response_data = {
-            'message': 'order cancelled successfully',
-            'status': True,
-            'data': {
-                'id': order.id,
-                'status': order.status
-            }
+    response_data = {
+        'message': 'order cancelled successfully',
+        'status': True,
+        'data': {
+            'id': order.id,
+            'status': order.status
         }
+    }
 
-        if refund_note:
-            response_data['data']['refund_note'] = refund_note
+    if refund_note:
+        response_data['data']['refund_note'] = refund_note
 
-        return jsonify(response_data), 200
-
-    except IntegrityError as e:
-        db.session.rollback()
-        current_app.logger.error('integrity error deleting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to delete order: data integrity violation',
-            'status': False
-        }), 422
-
-    except DataError as e:
-        db.session.rollback()
-        current_app.logger.error('data error deleting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to delete order: invalid data format',
-            'status': False
-        }), 422
-
-    except OperationalError as e:
-        db.session.rollback()
-        current_app.logger.error('operational error deleting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to delete order: database connection issue',
-            'status': False
-        }), 503
-
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error('database error deleting order %s: %s', order_id, e)
-        return jsonify({
-            'message': 'failed to delete order',
-            'status': False
-        }), 500
+    return jsonify(response_data), 200

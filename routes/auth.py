@@ -1,6 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
 from flask_jwt_extended import jwt_required, create_access_token, create_refresh_token, get_jwt_identity
-from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from datetime import datetime
 from helper.utils import db
 from models.users import User
@@ -120,20 +119,7 @@ def login():
             'status': False
         }), 400
 
-    try:
-        user = User.query.filter_by(is_active=True, email=email).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error during login: %s', e)
-        return jsonify({
-            'message': 'failed to login: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error during login: %s', e)
-        return jsonify({
-            'message': 'failed to login',
-            'status': False
-        }), 500
+    user = User.query.filter_by(is_active=True, email=email).first()
 
     if user is None or not check_password(password, user.password_hash):
         return jsonify({
@@ -154,12 +140,9 @@ def login():
     try:
         user.last_login = datetime.utcnow()
         db.session.commit()
-    except OperationalError as e:
+    except Exception:
         db.session.rollback()
-        current_app.logger.error('operational error updating last_login: %s', e)
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error('database error updating last_login: %s', e)
+        current_app.logger.warning('failed to update last_login for user %s', user.id)
 
     return jsonify({
         'status': True,
@@ -236,20 +219,7 @@ def refresh():
     """
     current_user_id = get_jwt_identity()
 
-    try:
-        user = User.query.filter_by(id=current_user_id, is_active=True).first()
-    except OperationalError as e:
-        current_app.logger.error('operational error during token refresh: %s', e)
-        return jsonify({
-            'message': 'failed to refresh token: database connection issue',
-            'status': False
-        }), 503
-    except SQLAlchemyError as e:
-        current_app.logger.error('database error during token refresh: %s', e)
-        return jsonify({
-            'message': 'failed to refresh token',
-            'status': False
-        }), 500
+    user = User.query.filter_by(id=current_user_id, is_active=True).first()
 
     if user is None:
         return jsonify({
