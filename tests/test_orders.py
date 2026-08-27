@@ -93,7 +93,7 @@ class TestCreateOrder:
             'items': []
         }, headers=auth_header(token))
 
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_create_order_seller_forbidden(self, client, seed_users, seed_products):
         token = get_auth_token(client, 'seller@test.com', 'password123')
@@ -212,7 +212,7 @@ class TestUpdateOrderStatus:
             'status': 'flying'
         }, headers=auth_header(token))
 
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_update_status_not_found(self, client, seed_users):
         token = get_auth_token(client, 'buyer@test.com', 'password123')

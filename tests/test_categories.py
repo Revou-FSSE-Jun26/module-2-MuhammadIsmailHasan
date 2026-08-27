@@ -70,8 +70,8 @@ class TestCreateCategory:
         response = client.post('/api/v1/categories/', json={'name': None},
                                headers=auth_header(token))
 
-        assert response.status_code == 400
-        assert response.get_json()['message'] == 'name is required'
+        assert response.status_code == 422
+        assert response.get_json()['message'] == 'name cannot be empty'
 
     def test_create_category_empty_name(self, client, seed_users):
         token = get_auth_token(client, 'seller@test.com', 'password123')
@@ -79,7 +79,7 @@ class TestCreateCategory:
         response = client.post('/api/v1/categories/', json={'name': ''},
                                headers=auth_header(token))
 
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_create_category_buyer_forbidden(self, client, seed_users):
         token = get_auth_token(client, 'buyer@test.com', 'password123')

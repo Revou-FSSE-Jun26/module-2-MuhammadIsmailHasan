@@ -65,6 +65,12 @@ def register_error_handlers(flask_app):
 
     @flask_app.errorhandler(422)
     def unprocessable_entity(error):
+        if hasattr(error, 'data') and 'message' in error.data:
+            return jsonify({
+                'message': error.data['message'],
+                'status': False
+            }), 422
+
         # flask-smorest validation errors come as 422 with structured data
         if hasattr(error, 'data') and 'messages' in error.data:
             messages = error.data['messages']
