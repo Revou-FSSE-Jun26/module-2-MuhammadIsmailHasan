@@ -47,7 +47,7 @@ class TestRegisterUser:
             'username': 'test'
         })
 
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_register_invalid_email(self, client, db):
         response = client.post('/api/v1/users/', json={
@@ -57,7 +57,7 @@ class TestRegisterUser:
             'role': 'buyer'
         })
 
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert response.get_json()['message'] == 'invalid email format'
 
     def test_register_invalid_role(self, client, db):
@@ -68,7 +68,7 @@ class TestRegisterUser:
             'role': 'admin'
         })
 
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert 'buyer or seller only' in response.get_json()['message']
 
     def test_register_empty_body(self, client, db):
@@ -76,7 +76,7 @@ class TestRegisterUser:
                                data='',
                                content_type='application/json')
 
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestGetUserAccount:

@@ -42,7 +42,7 @@ class TestLogin:
             'password': 'password123'
         })
 
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert response.get_json()['message'] == 'email and password are required'
 
     def test_login_missing_password(self, client, seed_users):
@@ -50,7 +50,7 @@ class TestLogin:
             'email': 'buyer@test.com'
         })
 
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert response.get_json()['message'] == 'email and password are required'
 
     def test_login_empty_body(self, client, seed_users):
@@ -58,7 +58,7 @@ class TestLogin:
                                data='',
                                content_type='application/json')
 
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_login_inactive_user(self, client, seed_users, db):
         user = seed_users['buyer']
