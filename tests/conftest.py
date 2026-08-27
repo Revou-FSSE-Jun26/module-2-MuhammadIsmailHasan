@@ -3,17 +3,17 @@ import pytest
 
 os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
 
-from app import init_app
-from helper.utils import db as _db
-from models.users import User
-from models.categories import Category
-from models.products import Product
-from helper.auth import hash_password
+from app import create_app
+from app.extensions import db as _db
+from app.models.users import User
+from app.models.categories import Category
+from app.models.products import Product
+from app.auth import hash_password
 
 
 @pytest.fixture(scope='session')
 def app():
-    app = init_app()
+    app = create_app()
     app.config.update({
         'TESTING': True,
         'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',

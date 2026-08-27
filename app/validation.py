@@ -1,11 +1,13 @@
-from models import Category
+from app.models import Category
 import re
+
 
 def is_valid_email(email):
     EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
     if not email or not isinstance(email, str):
         return False
     return EMAIL_REGEX.match(email.strip()) is not None
+
 
 def validation_category_data(data, required_all=True):
     name = data.get('name')
@@ -27,7 +29,7 @@ def validation_products_data(data, required_all=True):
     stock = data.get('stock')
     description = data.get('description')
     category_id = data.get('category_id')
-    
+
     if required_all and name is None:
         return "name is required", 400
     if name is not None:
@@ -35,7 +37,7 @@ def validation_products_data(data, required_all=True):
             return "name cannot be empty", 400
         if len(name) > 255:
             return "name cannot exceed 255 characters", 422
-    
+
     if required_all and price is None:
         return "price is required", 400
     if price is not None:
@@ -45,32 +47,33 @@ def validation_products_data(data, required_all=True):
             return "price cannot exceed 11 digits number", 422
         if price < 0:
             return "price cannot be negative", 422
-        
+
     if required_all and stock is None:
         return "stock is required", 400
     if stock is not None:
         if not isinstance(stock, int) or isinstance(stock, bool):
             return "stock must be number", 400
-    
+
     if description is not None:
         if len(description) > 1000:
             return "description cannot exceed 1000 characters", 422
-    
+
     if category_id is not None:
         if not isinstance(category_id, int) or isinstance(category_id, bool):
             return "category_id must be a number", 400
         category = Category.query.filter_by(id=category_id, is_active=True).first()
         if category is None:
             return "category id not found", 404
-        
+
     return None, None
+
 
 def validation_users_data(data, required_all=True):
     email = data.get('email')
     username = data.get('username')
     password = data.get('password')
     role = data.get('role')
-    
+
     if required_all and email is None:
         return "email is required", 400
     if email is not None:
@@ -80,7 +83,7 @@ def validation_users_data(data, required_all=True):
             return "email cannot exceed 100 characters", 422
         if not is_valid_email(email):
             return "invalid email format", 400
-    
+
     if required_all and username is None:
         return "username is required", 400
     if username is not None:
@@ -88,22 +91,22 @@ def validation_users_data(data, required_all=True):
             return "username cannot be empty", 400
         if len(username) > 100:
             return "username cannot exceed 100 characters", 422
-    
+
     if required_all and password is None:
         return "password is required", 400
     if password is not None:
         if not isinstance(password, str) or not password.strip():
             return "password cannot be empty or must be text", 400
-        
+
     if required_all and role is None:
-        return "role is required", 400 
+        return "role is required", 400
     roles = ('buyer', 'seller')
     if role is not None:
         if not isinstance(role, str) or not role.strip():
             return "role cannot be empty or must be text", 400
         if role not in roles:
             return "user role must be buyer or seller only", 400
-    
+
     return None, None
 
 

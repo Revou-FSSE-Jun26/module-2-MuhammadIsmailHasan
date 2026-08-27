@@ -3,12 +3,15 @@ Seeder untuk testing products dan users endpoint
 Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()"
 """
 
-from app import app
-from helper.utils import db
-from models import User, Product, Category, Order, OrderItem
+from app import create_app
+from app.extensions import db
+from app.models import User, Product, Category, Order, OrderItem
 import bcrypt
 from datetime import datetime, timedelta
 from decimal import Decimal
+
+app = create_app()
+
 
 def clear_tables():
     """Hapus semua data dari table untuk testing fresh"""
@@ -19,10 +22,10 @@ def clear_tables():
         db.session.query(User).delete()
         db.session.query(Category).delete()
         db.session.commit()
-        print("✓ Tables cleared")
+        print("Tables cleared")
     except Exception as e:
         db.session.rollback()
-        print(f"✗ Error clearing tables: {e}")
+        print(f"Error clearing tables: {e}")
         raise
 
 
@@ -35,15 +38,15 @@ def seed_categories():
         Category(name='Books'),
         Category(name='Sports'),
     ]
-    
+
     try:
         db.session.add_all(categories)
         db.session.commit()
-        print(f"✓ Created {len(categories)} categories")
+        print(f"Created {len(categories)} categories")
         return categories
     except Exception as e:
         db.session.rollback()
-        print(f"✗ Error seeding categories: {e}")
+        print(f"Error seeding categories: {e}")
         raise
 
 
@@ -81,12 +84,12 @@ def seed_users():
             'role': 'seller'
         },
     ]
-    
+
     users = []
     try:
         for user_data in users_data:
             password_hash = bcrypt.hashpw(
-                user_data['password'].encode('utf-8'), 
+                user_data['password'].encode('utf-8'),
                 bcrypt.gensalt()
             ).decode('utf-8')
             user = User(
@@ -97,26 +100,24 @@ def seed_users():
                 last_login=datetime.utcnow() - timedelta(days=1)
             )
             users.append(user)
-        
+
         db.session.add_all(users)
         db.session.commit()
-        print(f"✓ Created {len(users)} users")
+        print(f"Created {len(users)} users")
         return users
     except Exception as e:
         db.session.rollback()
-        print(f"✗ Error seeding users: {e}")
+        print(f"Error seeding users: {e}")
         raise
 
 
 def seed_products():
     """Seed produk untuk testing"""
-    # Get categories
     electronics_cat = Category.query.filter_by(name='Electronics').first()
     clothing_cat = Category.query.filter_by(name='Clothing').first()
     food_cat = Category.query.filter_by(name='Food & Beverages').first()
-    
+
     products_data = [
-        # Electronics
         {
             'category_id': electronics_cat.id if electronics_cat else None,
             'name': 'Laptop Pro 15"',
@@ -152,8 +153,6 @@ def seed_products():
             'price': 149.99,
             'stock': 25
         },
-        
-        # Clothing
         {
             'category_id': clothing_cat.id if clothing_cat else None,
             'name': 'Cotton T-Shirt',
@@ -175,8 +174,6 @@ def seed_products():
             'price': 59.99,
             'stock': 30
         },
-        
-        # Food & Beverages
         {
             'category_id': food_cat.id if food_cat else None,
             'name': 'Organic Coffee Beans',
@@ -192,7 +189,7 @@ def seed_products():
             'stock': 80
         },
     ]
-    
+
     products = []
     try:
         for product_data in products_data:
@@ -204,14 +201,14 @@ def seed_products():
                 stock=product_data['stock']
             )
             products.append(product)
-        
+
         db.session.add_all(products)
         db.session.commit()
-        print(f"✓ Created {len(products)} products")
+        print(f"Created {len(products)} products")
         return products
     except Exception as e:
         db.session.rollback()
-        print(f"✗ Error seeding products: {e}")
+        print(f"Error seeding products: {e}")
         raise
 
 
@@ -222,7 +219,7 @@ def seed_orders():
     products = Product.query.limit(5).all()
 
     if not buyer or not buyer2 or len(products) < 3:
-        print("✗ Cannot seed orders: missing users or products")
+        print("Cannot seed orders: missing users or products")
         return
 
     orders_data = [
@@ -305,47 +302,40 @@ def seed_orders():
                 db.session.add(order_item)
 
         db.session.commit()
-        print(f"✓ Created {len(orders_data)} orders")
+        print(f"Created {len(orders_data)} orders")
     except Exception as e:
         db.session.rollback()
-        print(f"✗ Error seeding orders: {e}")
+        print(f"Error seeding orders: {e}")
         raise
 
 
 def seed_test_data():
     """Run all seeders"""
     with app.app_context():
-        print("\n" + "="*50)
+        print("\n" + "=" * 50)
         print("Starting test data seeding...")
-        print("="*50 + "\n")
-        
+        print("=" * 50 + "\n")
+
         try:
             clear_tables()
             seed_categories()
             seed_users()
             seed_products()
             seed_orders()
-            
-            print("\n" + "="*50)
-            print("✓ Test data seeding completed successfully!")
-            print("="*50 + "\n")
-            
-            # Print summary
+
+            print("\n" + "=" * 50)
+            print("Test data seeding completed successfully!")
+            print("=" * 50 + "\n")
+
             print("Summary:")
             print(f"  Users: {User.query.count()}")
             print(f"  Categories: {Category.query.count()}")
             print(f"  Products: {Product.query.count()}")
             print(f"  Orders: {Order.query.count()}")
             print(f"  Order Items: {OrderItem.query.count()}")
-            print("\nTest Users (untuk login testing):")
-            for user in User.query.all():
-                print(f"  - {user.username} ({user.email}) - Role: {user.role}")
-            print("\nOrders:")
-            for order in Order.query.all():
-                print(f"  - Order #{order.id} | User: {order.user_id} | Status: {order.status} | Active: {order.is_active}")
-            
+
         except Exception as e:
-            print(f"\n✗ Seeding failed: {e}")
+            print(f"\nSeeding failed: {e}")
             raise
 
 

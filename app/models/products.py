@@ -1,5 +1,6 @@
 from datetime import datetime
-from helper.utils import db
+from app.extensions import db
+
 
 class Product(db.Model):
     __tablename__ = 'products'
@@ -14,9 +15,9 @@ class Product(db.Model):
     price = db.Column(db.Numeric(11, 2), nullable=False)
     stock = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -24,12 +25,12 @@ class Product(db.Model):
             'price': float(self.price) if self.price is not None else None,
             'stock': self.stock,
         }
-        
+
     def to_dict_detail(self):
         result = self.to_dict()
         result['description'] = self.description
         result['created_at'] = self.created_at.isoformat() if self.created_at else None
         result['is_active'] = self.is_active
         result['category'] = self.category.to_dict() if self.category else None
-        
+
         return result

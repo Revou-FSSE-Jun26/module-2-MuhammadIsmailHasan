@@ -5,6 +5,13 @@ __pycache__/
 .pytest_cache/
 *.pyc
 
+# =======
+# Coverage
+# =======
+.coverage
+htmlcov/
+coverage.xml
+
 
 # =======
 # Virtual Environment

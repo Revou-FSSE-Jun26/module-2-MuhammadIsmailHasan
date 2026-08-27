@@ -78,7 +78,7 @@ class TestCreateProduct:
             'stock': 5
         }, headers=auth_header(token))
 
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert response.get_json()['message'] == 'name is required'
 
     def test_create_product_negative_price(self, client, seed_users):
@@ -100,7 +100,7 @@ class TestCreateProduct:
                                content_type='application/json',
                                headers=auth_header(token))
 
-        assert response.status_code == 400
+        assert response.status_code == 422
 
 
 class TestGetProduct:
@@ -215,7 +215,7 @@ class TestDeleteProduct:
         assert response.status_code == 403
 
     def test_delete_product_with_active_order(self, client, seed_users, seed_products, db):
-        from models.orders import Order, OrderItem
+        from app.models.orders import Order, OrderItem
 
         product = seed_products[0]
         buyer = seed_users['buyer']

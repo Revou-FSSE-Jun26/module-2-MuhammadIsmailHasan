@@ -1,5 +1,5 @@
 from datetime import datetime
-from helper.utils import db
+from app.extensions import db
 
 
 class Order(db.Model):

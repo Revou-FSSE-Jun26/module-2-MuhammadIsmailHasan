@@ -1,6 +1,6 @@
 import pytest
-from models.orders import Order, OrderItem
-from models.products import Product
+from app.models.orders import Order, OrderItem
+from app.models.products import Product
 from tests.conftest import get_auth_token, auth_header
 
 
