@@ -1,66 +1,103 @@
 # Revoshop
 
-A simple e-commerce backend application for learning Flask, SQLAlchemy, and PostgreSQL fundamentals.
+An e-commerce backend API built with Flask, demonstrating a layered architecture (routes → services → repositories), JWT authentication, and role-based access control.
 
 ## Overview
 
-Revoshop is a hands-on learning project demonstrating core backend concepts including database design, API endpoints, CRUD operations, relationships, constraints, and indexing in PostgreSQL.
+Revoshop is a hands-on learning project for backend fundamentals: database design, RESTful API design, validation, authentication, and automated testing. The codebase follows a clean separation of concerns with a service/repository pattern and schema-based validation.
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
 | Backend | Python, Flask |
+| API / OpenAPI | flask-smorest |
 | Database | PostgreSQL |
 | ORM | SQLAlchemy |
 | Migration | Flask-Migrate |
-| Password Hashing | bcrypt |
-| Testing | pytest, requests |
+| Validation | marshmallow |
+| Auth | flask-jwt-extended, bcrypt |
+| Testing | pytest, pytest-cov |
 
 ## Features
 
-- ✅ User Management (register, authentication)
-- ✅ Product Management (CRUD operations)
-- ✅ Product Categories
-- ✅ Order Management
-- ✅ Validation & Error Handling
-- ✅ RESTful API Endpoints
+- User management (registration, JWT login/refresh)
+- Role-based access control (buyer, seller, admin)
+- Product management (CRUD, filtering, pagination)
+- Product categories (CRUD, optional nested products)
+- Order management (creation with stock deduction, status transitions, cancel/refund)
+- Schema-based validation and centralized error handling
+
+## Architecture
+
+Each domain (users, auth, categories, products, orders) is organized into layers:
+
+```
+Request → Route (flask-smorest MethodView)
+        → Schema (marshmallow validation / serialization)
+        → Service (business logic, custom exceptions)
+        → Repository (data access)
+        → Model (SQLAlchemy)
+```
 
 ## Project Structure
 
 ```
-revoshop/
-├── models/                 # Database models
-│   ├── user.py            # User model with authentication
-│   ├── product.py         # Product model with validation
-│   ├── category.py        # Category model
-│   └── order.py           # Order model
-├── routes/                # API endpoints
-│   ├── users.py           # User endpoints (register, get)
-│   └── products.py        # Product endpoints (CRUD)
-├── seeders/               # Database seeding
-│   └── seeders.py         # Populate test data
-├── tests/                 # Automated tests
-│   └── test_endpoints.py  # Test all API endpoints
-├── migrations/            # Database migrations (Flask-Migrate)
-├── app.py                 # Flask application entry point
-├── utils.py               # Database utilities
-├── run_server.py          # Start development server
-├── run_tests.py           # Run test suite
-└── requirements.txt       # Python dependencies
+module-2/
+├── app/
+│   ├── __init__.py            # Application factory (create_app)
+│   ├── extensions.py          # db, jwt, migrate, api instances
+│   ├── auth.py                # password hashing, roles_required decorator
+│   ├── errors.py              # centralized HTTP + SQLAlchemy error handlers
+│   ├── validation.py          # shared constants (e.g. ACTIVE_ORDER_STATUSES)
+│   ├── models/                # SQLAlchemy models
+│   │   ├── users.py
+│   │   ├── categories.py
+│   │   ├── products.py
+│   │   └── orders.py
+│   ├── schemas/               # marshmallow schemas (validation + serialization)
+│   │   ├── user_schema.py
+│   │   ├── category_schema.py
+│   │   ├── product_schema.py
+│   │   └── order_schema.py
+│   ├── repositories/          # data access layer
+│   │   ├── user_repository.py
+│   │   ├── category_repository.py
+│   │   ├── product_repository.py
+│   │   └── order_repository.py
+│   ├── services/              # business logic layer
+│   │   ├── auth_service.py
+│   │   ├── user_service.py
+│   │   ├── category_service.py
+│   │   ├── product_service.py
+│   │   └── order_service.py
+│   └── routes/                # flask-smorest blueprints (MethodView)
+│       ├── auth.py
+│       ├── users.py
+│       ├── categories.py
+│       ├── products.py
+│       └── orders.py
+├── config/                    # base / development / production configs
+├── migrations/                # Flask-Migrate migrations
+├── seeders/                   # database seeding
+├── tests/
+│   ├── conftest.py            # shared fixtures (app, db, client, seeders)
+│   ├── unit/                  # fast, isolated tests (mocked repositories)
+│   └── integration/           # full HTTP-through-stack tests
+├── run.py                     # application entry point
+├── pytest.ini                 # pytest configuration
+└── requirements.txt           # Python dependencies
 ```
 
 ## Database Schema
 
-### Tables
-
 | Table | Purpose |
 |-------|---------|
-| `users` | Store user accounts with authentication |
-| `categories` | Store product categories |
-| `products` | Store product information |
-| `orders` | Store customer orders |
-| `order_items` | Store products in each order |
+| `users` | User accounts with authentication and roles |
+| `categories` | Product categories |
+| `products` | Product information |
+| `orders` | Customer orders |
+| `order_items` | Line items within each order |
 
 ### Database Diagram
 
@@ -68,13 +105,13 @@ revoshop/
 
 ## Setup
 
-### 1. Install Python Dependencies
+### 1. Install dependencies
 
 ```bash
 pip3 install -r requirements.txt
 ```
 
-### 2. PostgreSQL Setup
+### 2. PostgreSQL
 
 **macOS (Homebrew):**
 ```bash
@@ -82,425 +119,153 @@ brew install postgresql@18
 brew services start postgresql@18
 ```
 
-**Windows:** Download from [postgresql.org](https://www.postgresql.org/download/windows/)
-
-**Create Database:**
+**Create the database:**
 ```bash
 psql -U postgres -c "CREATE DATABASE revoshop_db;"
 ```
 
-### 3. Configure Environment
+### 3. Configure environment
 
-Copy `.env.example` to `.env` and update the database URL:
+Copy `.env.example` to `.env` and set the database URL:
 
 ```bash
 DATABASE_URL=postgresql://postgres:password@localhost:5432/revoshop_db
 ```
 
-### 4. Initialize Database
+### 4. Initialize the database
 
 ```bash
-# Create tables from migrations
 flask db upgrade
-
-# Or using direct SQL
-psql -U postgres -d revoshop_db -f schema.sql
-psql -U postgres -d revoshop_db -f seed.sql
 ```
 
-## Usage
-
-### Start Development Server
-
-```bash
-# Default port 5000
-python3 run_server.py
-
-# Or use custom port
-python3 run_server.py 5001
-```
-
-Server runs on: `http://localhost:5001`
-
-### API Documentation (Swagger)
-
-Once the server is running, open `http://localhost:5001/apidocs/` in your browser to explore and test all endpoints interactively via Swagger UI.
-
-### Seed Test Data
+### 5. Seed test data (optional)
 
 ```bash
 python3 -m seeders.seeders
 ```
 
-This creates:
-- 5 test users (john_doe, jane_smith, etc.)
-- 5 product categories
-- 10 sample products
-
-### Run Tests
+## Running the App
 
 ```bash
-# Terminal 1: Start server
-python3 run_server.py 5001
+# Uses FLASK_ENV (defaults to development)
+python3 run.py
 
-# Terminal 2: Run tests
-FLASK_TEST_URL=http://localhost:5001 python3 tests/test_endpoints.py
+# Or with production config
+FLASK_ENV=production python3 run.py
 ```
 
-Test coverage:
-- ✅ User registration and retrieval
-- ✅ Product CRUD operations
-- ✅ Error handling and validation
-- ✅ API response times
+### API Documentation (Swagger UI)
+
+With the server running, open the flask-smorest Swagger UI:
+
+```
+http://localhost:5000/docs/swagger-ui
+```
 
 ## API Endpoints
 
-### Users
+All endpoints are prefixed with `/api/v1`. Protected endpoints require a
+`Authorization: Bearer <access_token>` header.
+
+### Auth
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/users/register` | Register new user |
-| GET | `/users/<id>` | Get user by ID |
+| POST | `/api/v1/auth/login` | Log in, returns access + refresh tokens |
+| POST | `/api/v1/auth/refresh` | Get a new access token (refresh token required) |
 
-**Register User:**
-```json
-POST /users/register
-{
-  "username": "ken",
-  "email": "ken@gmail.com",
-  "password": "12345",
-  "role": "user"
-}
-```
+### Users
 
-**Response (201 Created):**
-```json
-{
-	"data": {
-		"created_at": "2026-08-15T16:11:28.672574",
-		"email": "ken@gmail.com",
-		"id": 34,
-		"last_login": null,
-		"role": "user",
-		"username": "ken"
-	},
-	"message": "user created",
-	"status": true
-}
-```
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| POST | `/api/v1/users/` | Register a new user | public |
+| GET | `/api/v1/users/me` | Get current user | authenticated |
+| GET | `/api/v1/users/<id>` | Get user by ID | authenticated |
+| DELETE | `/api/v1/users/<id>` | Delete a user (own account or admin) | authenticated |
 
-**Test Result:** ✅ Success - User registered with ID=34
+### Categories
 
-**Insomnia Screenshot:**
-![Register User](./images/tests/register%20user.png)
-
----
-
-**Error Case - Duplicate Username (409):**
-```json
-{
-  "message": "username already exists",
-  "status": false,
-  "error": "this username is already registered"
-}
-```
-
----
-
-**Get User:**
-```bash
-GET /users/1
-```
-
-**Response (200 OK):**
-```json
-{
-	"data": {
-		"created_at": "2026-08-15T16:03:10.325628",
-		"email": "alice@example.com",
-		"id": 24,
-		"last_login": "2026-08-14T16:03:09.933791",
-		"role": "user",
-		"username": "alice_brown"
-	},
-	"message": "success get user data",
-	"status": true
-}
-```
-
-**Test Result:** ✅ Success - User data retrieved
-
-**Insomnia Screenshot:**
-![Get User Success](./images/tests/get%20user%20by%20id%20success.png)
-
-**Error Case: 🛑 User not found (404):**
-
-**Insomnia Screenshot:**
-![Get User Failed](./images/tests/get%20user%20by%20id%20failed.png)
-
----
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/categories/` | List categories (filter, sort, paginate, `with_products`) | any role |
+| POST | `/api/v1/categories/` | Create a category | seller, admin |
+| GET | `/api/v1/categories/<id>` | Get a category with its products | any role |
+| PUT | `/api/v1/categories/<id>` | Update a category | seller, admin |
+| DELETE | `/api/v1/categories/<id>` | Soft-delete a category | seller, admin |
 
 ### Products
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/products/` | Get all products |
-| POST | `/products/` | Create new product |
-| GET | `/products/<id>` | Get product by ID |
-| PUT | `/products/<id>` | Update product |
-| DELETE | `/products/<id>` | Delete product |
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/products/` | List products (filter, sort, paginate) | any role |
+| POST | `/api/v1/products/` | Create a product | seller, admin |
+| GET | `/api/v1/products/<id>` | Get a product | any role |
+| PUT | `/api/v1/products/<id>` | Update a product | seller, admin |
+| DELETE | `/api/v1/products/<id>` | Soft-delete a product | seller, admin |
 
-**Get All Products:**
-```bash
-GET /products/
+### Orders
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/orders/` | List orders (own orders; admin sees all) | any role |
+| POST | `/api/v1/orders/` | Create an order (checks stock, deducts inventory) | buyer, admin |
+| GET | `/api/v1/orders/<id>` | Get an order (owner or admin) | any role |
+| PUT | `/api/v1/orders/<id>` | Update order status (validated transitions) | buyer, admin |
+| DELETE | `/api/v1/orders/<id>` | Cancel an order (refunds stock where applicable) | buyer, admin |
+
+**Order status transitions:**
+
+```
+waiting_for_payment → processing → shipped → delivered
+        ↓                  ↓
+    cancelled          cancelled
 ```
 
-**Response (200 OK):**
-```json
-{
-  "message": "get all products success",
-  "status": true,
-  "data": [
-    {
-      "id": 1,
-      "name": "Laptop Pro 15\"",
-      "description": "High-performance laptop with 16GB RAM and 512GB SSD",
-      "price": "1299.99",
-      "stock": 15,
-      "category_id": 1,
-      "created_at": "2026-08-15T15:31:36.864394"
-    },
-    {
-      "id": 2,
-      "name": "Wireless Mouse",
-      "description": "Ergonomic wireless mouse with long battery life",
-      "price": "29.99",
-      "stock": 50,
-      "category_id": 1,
-      "created_at": "2026-08-15T15:31:36.864400"
-    }
-  ]
-}
-```
+## Testing
 
-**Test Result:** ✅ Success - Retrieved 10 products
-
-**Insomnia Screenshot:**
-![Get All Products](./images/tests/get%20all%20products.png)
-
----
-
-**Create Product:**
-```json
-POST /products/
-{
-  "name": "Mechanical Keyboard RGB",
-  "description": "Premium mechanical keyboard with RGB backlighting",
-  "price": 199.99,
-  "stock": 25,
-  "category_id": 1
-}
-```
-
-**Response (201 Created):**
-```json
-{
-  "message": "product created",
-  "status": true,
-  "data": {
-    "id": 34,
-    "name": "Mechanical Keyboard RGB",
-    "description": "Premium mechanical keyboard with RGB backlighting",
-    "price": "199.99",
-    "stock": 25,
-    "category_id": 1,
-    "created_at": "2026-08-15T16:15:30.123456"
-  }
-}
-```
-
-**Test Result:** ✅ Success - Product created with ID=34
-
----
-
-**Error Case - Invalid Price (400):**
-```json
-POST /products/
-{
-  "name": "Invalid Product",
-  "price": -50.00,
-  "stock": 10
-}
-```
-
-**Response (400 Bad Request):**
-```json
-{
-  "message": "product price must be greater than 0",
-  "status": false
-}
-```
-
-**Test Result:** ❌ Failed as expected - Price validation working
-
----
-
-**Get Single Product:**
-```bash
-GET /products/1
-```
-
-**Response (200 OK):**
-```json
-{
-  "message": "success get product",
-  "status": true,
-  "data": {
-    "id": 1,
-    "name": "Laptop Pro 15\"",
-    "description": "High-performance laptop with 16GB RAM and 512GB SSD",
-    "price": "1299.99",
-    "stock": 15,
-    "category_id": 1,
-    "created_at": "2026-08-15T15:31:36.864394"
-  }
-}
-```
-
-**Test Result:** ✅ Success - Product retrieved
-
-**Insomnia Screenshot:**
-![Get Product by ID Success](./images/tests/get%20products%20by%20id%20success.png)
-
-**Error Case: 🛑 Product not found (404):**
-
-**Insomnia Screenshot:**
-![Get Product by ID Success](./images/tests/get%20product%20by%20id%20failed.png)
-
-
----
-
-**Update Product:**
-```json
-PUT /products/1
-{
-  "name": "Laptop Pro 15\" 2026",
-  "price": 1399.99,
-  "stock": 12
-}
-```
-
-**Response (200 OK):**
-```json
-{
-  "message": "success update product",
-  "status": true,
-  "data": {
-    "id": 1,
-    "name": "Laptop Pro 15\" 2026",
-    "description": "High-performance laptop with 16GB RAM and 512GB SSD",
-    "price": "1399.99",
-    "stock": 12,
-    "category_id": 1,
-    "created_at": "2026-08-15T15:31:36.864394"
-  }
-}
-```
-
-**Test Result:** ✅ Success - Product updated
-
----
-
-**Delete Product:**
-```bash
-DELETE /products/34
-```
-
-**Response (200 OK):**
-```json
-{
-  "message": "success delete product",
-  "status": true
-}
-```
-
-**Test Result:** ✅ Success - Product deleted
-
----
-
-**Error Case - Not Found (404):**
-```bash
-DELETE /products/99999
-```
-
-**Response (404 Not Found):**
-```json
-{
-  "message": "product not found",
-  "status": false
-}
-```
-
-**Test Result:** ❌ Not found as expected
-
-## Example Usage
+Tests are split into fast unit tests (isolated, repositories mocked) and
+integration tests (full HTTP stack against an in-memory SQLite database).
 
 ```bash
-# Get all products
-curl http://localhost:5001/products/
+# Run everything (unit + integration)
+python3 -m pytest
 
-# Register new user
-curl -X POST http://localhost:5001/users/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "alice",
-    "email": "alice@example.com",
-    "password": "password123"
-  }'
+# Only unit tests (fast)
+python3 -m pytest tests/unit/
 
-# Create product
-curl -X POST http://localhost:5001/products/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Wireless Mouse",
-    "price": 29.99,
-    "stock": 50,
-    "category_id": 1
-  }'
+# Only integration tests
+python3 -m pytest tests/integration/
+
+# A single file, class, or test
+python3 -m pytest tests/unit/test_order_service.py
+python3 -m pytest tests/unit/test_order_service.py::TestDelete
+python3 -m pytest tests/integration/test_orders.py::TestCreateOrder::test_create_order_success
+
+# Filter by keyword
+python3 -m pytest -k "refund or insufficient"
 ```
 
-## Test Data
+> Tip: the development config enables `SQLALCHEMY_ECHO`, which prints every SQL
+> statement during integration tests. Add `--log-level=WARNING` to quiet it.
 
-Default test users (password = username + digits, see seeders.py):
-- `john_doe` (admin)
-- `jane_smith` (user)
-- `bob_wilson` (user)
-- `alice_brown` (user)
-- `charlie_davis` (seller)
+### Coverage
+
+```bash
+# Terminal report with missing lines
+python3 -m pytest --cov=app --cov-report=term-missing
+
+# HTML report (open htmlcov/index.html afterwards)
+python3 -m pytest --cov=app --cov-report=html
+```
 
 ## Troubleshooting
 
-**Port 5000 already in use:**
-```bash
-python3 run_server.py 5001  # Use different port
-```
-
 **Database connection error:**
 - Verify PostgreSQL is running: `brew services list`
-- Check `.env` DATABASE_URL is correct
-- Ensure database exists: `psql -l`
+- Check `DATABASE_URL` in `.env`
+- Ensure the database exists: `psql -l`
 
 **Module not found errors:**
 ```bash
 pip3 install -r requirements.txt
 ```
-
-## Files Reference
-
-| File | Purpose |
-|------|---------|
-| `schema.sql` | Database table definitions |
-| `seed.sql` | Sample data |
-| `queries.sql` | Example SQL queries |
-| `requirements.txt` | Python package dependencies |
-| `.env.example` | Environment variable template |
