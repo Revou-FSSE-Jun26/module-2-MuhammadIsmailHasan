@@ -21,8 +21,11 @@ def register_error_handlers(flask_app):
 
     @flask_app.errorhandler(401)
     def unauthorized(error):
+        message = 'missing or invalid authentication token'
+        if hasattr(error, 'data') and 'message' in error.data:
+            message = error.data['message']
         return jsonify({
-            'message': 'missing or invalid authentication token',
+            'message': message,
             'status': False
         }), 401
 
@@ -52,8 +55,11 @@ def register_error_handlers(flask_app):
 
     @flask_app.errorhandler(409)
     def conflict(error):
+        message = 'resource conflict'
+        if hasattr(error, 'data') and 'message' in error.data:
+            message = error.data['message']
         return jsonify({
-            'message': 'resource conflict',
+            'message': message,
             'status': False
         }), 409
 

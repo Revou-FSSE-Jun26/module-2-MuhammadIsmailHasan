@@ -1,20 +1,7 @@
-"""
-Product schemas using Marshmallow.
-
-- Request schemas: validate incoming data (used by @blp.arguments)
-- Response schemas: serialize outgoing data (used by @blp.response)
-- Query schemas: validate query parameters for filtering/pagination
-"""
-
 from marshmallow import Schema, fields, validate, validates, ValidationError, pre_load
 
 
-# ─── Query Parameter Schema ──────────────────────────────────────────────────
-
-
 class ProductQuerySchema(Schema):
-    """Validates query parameters for GET /products."""
-
     name = fields.String(load_default=None)
     category_id = fields.Integer(load_default=None)
     min_price = fields.Float(load_default=None)
@@ -31,12 +18,7 @@ class ProductQuerySchema(Schema):
     limit = fields.Integer(load_default=10, validate=validate.Range(min=1, max=100))
 
 
-# ─── Request Schemas (input validation) ──────────────────────────────────────
-
-
 class CreateProductSchema(Schema):
-    """Validates incoming data when creating a product."""
-
     name = fields.String(
         required=True,
         validate=validate.Length(min=1, max=255, error="name cannot exceed 255 characters"),
@@ -61,7 +43,6 @@ class CreateProductSchema(Schema):
 
     @pre_load
     def strip_name(self, data, **kwargs):
-        """Strip whitespace from name before validation."""
         if 'name' in data and isinstance(data['name'], str):
             data['name'] = data['name'].strip()
             if not data['name']:
@@ -82,8 +63,6 @@ class CreateProductSchema(Schema):
 
 
 class UpdateProductSchema(Schema):
-    """Validates incoming data when updating a product. All fields optional."""
-
     name = fields.String(
         load_default=None,
         validate=validate.Length(min=1, max=255, error="name cannot exceed 255 characters"),
@@ -130,12 +109,7 @@ class UpdateProductSchema(Schema):
             raise ValidationError("stock must be number")
 
 
-# ─── Response Schemas (output serialization) ─────────────────────────────────
-
-
 class ProductResponseSchema(Schema):
-    """Serializes product for list responses."""
-
     id = fields.Integer()
     name = fields.String()
     price = fields.Float()
@@ -143,8 +117,6 @@ class ProductResponseSchema(Schema):
 
 
 class CategoryResponseSchema(Schema):
-    """Nested schema for category in product detail."""
-
     id = fields.Integer()
     name = fields.String()
     created_at = fields.DateTime(format='iso')
@@ -152,8 +124,6 @@ class CategoryResponseSchema(Schema):
 
 
 class ProductDetailResponseSchema(Schema):
-    """Serializes full product detail including category."""
-
     id = fields.Integer()
     name = fields.String()
     price = fields.Float()

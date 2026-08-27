@@ -5,3 +5,9 @@ from app.schemas.product_schema import (
     ProductResponseSchema,
     ProductDetailResponseSchema,
 )
+from app.schemas.user_schema import (
+    RegisterUserSchema,
+    LoginSchema,
+    UserResponseSchema,
+    UserPublicResponseSchema,
+)
