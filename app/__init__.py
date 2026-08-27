@@ -50,9 +50,11 @@ def create_app(config_name=None):
     from app.routes.products import products_blp
     from app.routes.users import users_blp
     from app.routes.auth import auth_blp
+    from app.routes.categories import categories_blp
     api.register_blueprint(products_blp)
     api.register_blueprint(users_blp)
     api.register_blueprint(auth_blp)
+    api.register_blueprint(categories_blp)
 
     # Error handlers
     register_error_handlers(flask_app)
