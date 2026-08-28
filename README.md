@@ -52,59 +52,32 @@ Notes:
 
 ## Business Logic
 
-The interesting behavior lives in the service layer (`app/services/`). Each rule
-below is enforced server-side regardless of the client.
+The main rules the system enforces:
 
-### Authentication & Users
+**Users**
 
-- **Password hashing** — passwords are hashed with bcrypt before storage; plain
-  passwords are never persisted or returned.
-- **JWT with role claim** — login issues an access token and a refresh token,
-  both carrying the user's `role` claim. Protected routes use a `roles_required`
-  decorator that reads this claim to authorize access.
-- **Unique username & email** — registration relies on database uniqueness
-  constraints; an integrity violation is translated into a clear
-  "username already exists" or "email already exists" response.
-- **Self-or-admin deletion** — a user can delete only their own account; admins
-  can delete anyone. Deletion is a soft delete (`is_active = false`), so records
-  are retained for referential integrity.
+- Passwords are stored securely (hashed), never in plain text.
+- Usernames and emails must be unique.
+- You can delete your own account; admins can delete anyone.
 
-### Categories
+**Categories**
 
-- **Unique active name** — creating or renaming a category checks for an existing
-  active category with the same name and rejects duplicates. On update, the
-  duplicate check excludes the category itself so a no-op rename is allowed.
-- **No-op updates short-circuit** — if an update carries no effective changes,
-  the category is returned without touching the database.
-- **Soft delete** — categories are deactivated rather than removed.
+- Category names must be unique.
+- Deleting a category hides it instead of erasing it.
 
-### Products
+**Products**
 
-- **Category validation** — when a product is created or updated with a
-  `category_id`, that category must exist and be active, otherwise the request is
-  rejected.
-- **No-op updates short-circuit** — updates with no changed fields skip the write.
-- **Delete guarded by active orders** — a product cannot be deleted while it is
-  referenced by any order in an active status (`waiting_for_payment`,
-  `processing`, `shipped`). This protects order history from dangling references.
-- **Soft delete** — products are deactivated, not physically removed.
+- A product's category must exist.
+- A product can't be deleted while it's part of an active order.
+- Deleting a product hides it instead of erasing it.
 
-### Orders
+**Orders**
 
-- **Stock validation before purchase** — every line item is checked against the
-  product's available stock. If any item exceeds available stock, the whole order
-  is rejected with an insufficient-stock error (nothing is committed).
-- **Server-side pricing** — `unit_price` is captured from the product at order
-  time, `sub_total` is computed per line, and the order `total_amount` is the sum.
-  Prices are never trusted from the client.
-- **Atomic creation with stock deduction** — the order, its items, and the stock
-  decrements are written in a single transaction, so an order is never created
-  without its inventory being reserved.
-- **Ownership enforcement** — a buyer can only view, update, or cancel their own
-  orders; admins can act on any order. Listing scopes results to the current user
-  unless the caller is an admin.
-- **Validated status transitions** — status changes must follow the allowed state
-  machine:
+- You can only order what's in stock; if any item runs short, the whole order is rejected.
+- Prices and totals are calculated by the server from the product, not sent by the client.
+- Placing an order reduces stock automatically.
+- You can only see and manage your own orders; admins can manage any order.
+- An order moves through fixed steps:
 
   ```
   waiting_for_payment → processing → shipped → delivered
@@ -112,15 +85,8 @@ below is enforced server-side regardless of the client.
       cancelled          cancelled
   ```
 
-  `delivered` and `cancelled` are terminal. Any transition outside this map
-  (skipping steps, moving backward, or leaving a terminal state) is rejected.
-- **Cancel / delete rules** —
-  - `shipped` and `delivered` orders cannot be cancelled or deleted.
-  - Cancelling a `waiting_for_payment` or `processing` order restores the reserved
-    stock back to each product.
-  - Cancelling a `processing` order additionally returns a note that a payment
-    refund will be processed.
-  - An already-`cancelled` order is simply soft-deleted (no stock change).
+- Shipped and delivered orders can't be cancelled.
+- Cancelling an unshipped order puts the stock back.
 
 ## Architecture
 
@@ -268,7 +234,7 @@ required headers, and sample request/response bodies. It also includes a login
 request whose access token can be reused across the other authenticated calls.
 Open it here:
 
-[Revoshop Postman Collection](https://.postman.co/workspace/My-Workspace~c07f0b13-1daa-4fe7-82d5-b0b04ee074f1/collection/17905565-db516ddd-eaec-4d91-9d9b-7edca1d2d4bc?action=share&creator=17905565)
+<a href="https://documenter.getpostman.com/view/17905565/2sBYAsyCVE#e32c17ab-a8f1-4f09-a5d4-feabb2e874f8" target="_blank" rel="noopener noreferrer">Revoshop Postman Collection</a>
 
 ### API Documentation (Swagger UI)
 
