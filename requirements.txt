@@ -20,6 +20,7 @@ itsdangerous==2.2.0
 Jinja2==3.1.6
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
+locust==2.46.4
 Mako==1.4.1
 MarkupSafe==3.0.3
 marshmallow==4.3.1
