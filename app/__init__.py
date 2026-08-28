@@ -19,12 +19,6 @@ def create_app(config_name=None):
     migrate.init_app(flask_app, db)
     api.init_app(flask_app)
 
-    # Flasgger — only if SWAGGER_CONFIG is present (development only)
-    swagger_config = flask_app.config.get('SWAGGER_CONFIG')
-    if swagger_config:
-        from flasgger import Flasgger
-        Flasgger(flask_app, config=swagger_config)
-
     # Register smorest blueprints
     from app.routes.products import products_blp
     from app.routes.users import users_blp
