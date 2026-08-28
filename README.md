@@ -4,7 +4,27 @@ An e-commerce backend API built with Flask, demonstrating a layered architecture
 
 ## Overview
 
-Revoshop is a hands-on learning project for backend fundamentals: database design, RESTful API design, validation, authentication, and automated testing. The codebase follows a clean separation of concerns with a service/repository pattern and schema-based validation.
+Revoshop is a hands-on learning project for backend fundamentals: database design, RESTful API design, validation, authentication, automated testing (unit + integration), and load testing. The codebase follows a clean separation of concerns with a service/repository pattern and schema-based validation.
+
+## Users & Roles
+
+Revoshop is a marketplace with three kinds of users. Every account has exactly
+one role, stored on the user and carried inside the JWT, which determines what
+that account is allowed to do.
+
+| Role | Who they are | What they can do |
+|------|--------------|------------------|
+| **buyer** | A customer who shops on the platform | Browse products and categories, place orders, and view / update / cancel their **own** orders. |
+| **seller** | A merchant who supplies the catalog | Browse products and categories, and create / update / delete products and categories. Sellers do **not** place orders. |
+| **admin** | A platform operator | Full access: everything a buyer and seller can do, plus acting on **any** user's orders and deleting **any** user account. |
+
+Notes:
+
+- **Self-registration** creates only `buyer` or `seller` accounts. The `admin`
+  role is privileged and is provisioned separately (e.g. via the seeder), not
+  through the public registration endpoint.
+- **Ownership matters even within a role.** A buyer can only touch their own
+  orders; only an admin can act across users.
 
 ## Tech Stack
 
@@ -12,21 +32,95 @@ Revoshop is a hands-on learning project for backend fundamentals: database desig
 |-----------|-----------|
 | Backend | Python, Flask |
 | API / OpenAPI | flask-smorest |
-| Database | PostgreSQL |
+| Database | PostgreSQL (psycopg2) |
 | ORM | SQLAlchemy |
-| Migration | Flask-Migrate |
+| Migration | Flask-Migrate (Alembic) |
 | Validation | marshmallow |
 | Auth | flask-jwt-extended, bcrypt |
-| Testing | pytest, pytest-cov |
+| Unit & integration testing | pytest, pytest-cov |
+| Performance testing | Locust |
+| API documentation | Postman, Swagger UI (flask-smorest) |
 
 ## Features
 
 - User management (registration, JWT login/refresh)
 - Role-based access control (buyer, seller, admin)
-- Product management (CRUD, filtering, pagination)
+- Product management (CRUD, filtering, sorting, pagination)
 - Product categories (CRUD, optional nested products)
 - Order management (creation with stock deduction, status transitions, cancel/refund)
 - Schema-based validation and centralized error handling
+
+## Business Logic
+
+The interesting behavior lives in the service layer (`app/services/`). Each rule
+below is enforced server-side regardless of the client.
+
+### Authentication & Users
+
+- **Password hashing** — passwords are hashed with bcrypt before storage; plain
+  passwords are never persisted or returned.
+- **JWT with role claim** — login issues an access token and a refresh token,
+  both carrying the user's `role` claim. Protected routes use a `roles_required`
+  decorator that reads this claim to authorize access.
+- **Unique username & email** — registration relies on database uniqueness
+  constraints; an integrity violation is translated into a clear
+  "username already exists" or "email already exists" response.
+- **Self-or-admin deletion** — a user can delete only their own account; admins
+  can delete anyone. Deletion is a soft delete (`is_active = false`), so records
+  are retained for referential integrity.
+
+### Categories
+
+- **Unique active name** — creating or renaming a category checks for an existing
+  active category with the same name and rejects duplicates. On update, the
+  duplicate check excludes the category itself so a no-op rename is allowed.
+- **No-op updates short-circuit** — if an update carries no effective changes,
+  the category is returned without touching the database.
+- **Soft delete** — categories are deactivated rather than removed.
+
+### Products
+
+- **Category validation** — when a product is created or updated with a
+  `category_id`, that category must exist and be active, otherwise the request is
+  rejected.
+- **No-op updates short-circuit** — updates with no changed fields skip the write.
+- **Delete guarded by active orders** — a product cannot be deleted while it is
+  referenced by any order in an active status (`waiting_for_payment`,
+  `processing`, `shipped`). This protects order history from dangling references.
+- **Soft delete** — products are deactivated, not physically removed.
+
+### Orders
+
+- **Stock validation before purchase** — every line item is checked against the
+  product's available stock. If any item exceeds available stock, the whole order
+  is rejected with an insufficient-stock error (nothing is committed).
+- **Server-side pricing** — `unit_price` is captured from the product at order
+  time, `sub_total` is computed per line, and the order `total_amount` is the sum.
+  Prices are never trusted from the client.
+- **Atomic creation with stock deduction** — the order, its items, and the stock
+  decrements are written in a single transaction, so an order is never created
+  without its inventory being reserved.
+- **Ownership enforcement** — a buyer can only view, update, or cancel their own
+  orders; admins can act on any order. Listing scopes results to the current user
+  unless the caller is an admin.
+- **Validated status transitions** — status changes must follow the allowed state
+  machine:
+
+  ```
+  waiting_for_payment → processing → shipped → delivered
+          ↓                  ↓
+      cancelled          cancelled
+  ```
+
+  `delivered` and `cancelled` are terminal. Any transition outside this map
+  (skipping steps, moving backward, or leaving a terminal state) is rejected.
+- **Cancel / delete rules** —
+  - `shipped` and `delivered` orders cannot be cancelled or deleted.
+  - Cancelling a `waiting_for_payment` or `processing` order restores the reserved
+    stock back to each product.
+  - Cancelling a `processing` order additionally returns a note that a payment
+    refund will be processed.
+  - An already-`cancelled` order is simply soft-deleted (no stock change).
 
 ## Architecture
 
@@ -78,12 +172,25 @@ module-2/
 │       ├── products.py
 │       └── orders.py
 ├── config/                    # base / development / production configs
-├── migrations/                # Flask-Migrate migrations
-├── seeders/                   # database seeding
+├── migrations/                # Flask-Migrate (Alembic) migrations
+├── seeders/                   # database seeding (users, categories, products, orders)
 ├── tests/
 │   ├── conftest.py            # shared fixtures (app, db, client, seeders)
 │   ├── unit/                  # fast, isolated tests (mocked repositories)
+│   │   ├── test_schemas.py
+│   │   ├── test_user_service.py
+│   │   ├── test_category_service.py
+│   │   ├── test_product_service.py
+│   │   └── test_order_service.py
 │   └── integration/           # full HTTP-through-stack tests
+│       ├── test_auth.py
+│       ├── test_users.py
+│       ├── test_categories.py
+│       ├── test_products.py
+│       └── test_orders.py
+├── locust/
+│   └── locustfile.py          # performance / load test (customer journey)
+├── images/                    # diagrams and test-result evidence
 ├── run.py                     # application entry point
 ├── pytest.ini                 # pytest configuration
 └── requirements.txt           # Python dependencies
@@ -101,7 +208,7 @@ module-2/
 
 ### Database Diagram
 
-![Schema Diagram](./images/diagram-2.png)
+![Schema Diagram](./images/diagram-3.png)
 
 ## Setup
 
@@ -154,13 +261,99 @@ python3 run.py
 FLASK_ENV=production python3 run.py
 ```
 
+### API Documentation (Postman)
+
+A published Postman collection documents every endpoint with example requests,
+required headers, and sample request/response bodies. It also includes a login
+request whose access token can be reused across the other authenticated calls.
+Open it here:
+
+[Revoshop Postman Collection](https://.postman.co/workspace/My-Workspace~c07f0b13-1daa-4fe7-82d5-b0b04ee074f1/collection/17905565-db516ddd-eaec-4d91-9d9b-7edca1d2d4bc?action=share&creator=17905565)
+
 ### API Documentation (Swagger UI)
 
 With the server running, open the flask-smorest Swagger UI:
 
 ```
-http://localhost:5000/docs/swagger-ui
+http://127.0.0.1:5000/docs/swagger-ui
 ```
+
+## Response Format
+
+All endpoints return a consistent JSON envelope. Every response includes a
+boolean `status` and a human-readable `message`.
+
+### Success
+
+`status` is `true`. Endpoints that return a resource include a `data` field;
+list endpoints add a `pagination` object; the login endpoint also returns tokens.
+
+Single resource:
+
+```json
+{
+  "status": true,
+  "message": "success get product",
+  "data": {
+    "id": 1,
+    "name": "Laptop Pro 15\"",
+    "price": 1299.99,
+    "stock": 15
+  }
+}
+```
+
+Paginated list:
+
+```json
+{
+  "status": true,
+  "message": "get all products success",
+  "data": [ ... ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total_items": 42,
+    "total_pages": 5
+  }
+}
+```
+
+Login (tokens are returned alongside the user data):
+
+```json
+{
+  "status": true,
+  "message": "login successful",
+  "access_token": "<jwt>",
+  "refresh_token": "<jwt>",
+  "data": { "id": 1, "username": "jane_smith", "email": "jane@example.com", "role": "buyer" }
+}
+```
+
+### Error
+
+`status` is `false` and `message` describes the problem. The HTTP status code
+carries the category of the error.
+
+```json
+{
+  "status": false,
+  "message": "product not found"
+}
+```
+
+| Status | When it occurs |
+|--------|----------------|
+| 400 | Bad request (e.g. deleting an order that cannot be cancelled) |
+| 401 | Missing or invalid authentication token, or wrong login credentials |
+| 403 | Authenticated but not allowed (wrong role, or not the resource owner) |
+| 404 | Resource not found |
+| 405 | HTTP method not allowed on the route |
+| 409 | Conflict (e.g. duplicate category name, username, or email) |
+| 422 | Validation error (invalid body/query) or insufficient stock |
+| 500 | Unexpected server error |
+| 503 | Database connection issue |
 
 ## API Endpoints
 
@@ -257,6 +450,45 @@ python3 -m pytest --cov=app --cov-report=term-missing
 # HTML report (open htmlcov/index.html afterwards)
 python3 -m pytest --cov=app --cov-report=html
 ```
+
+### Test Result
+
+Full suite passing with a coverage report:
+
+![Pytest Result](./images/tests/v2/pytest-20260829.png)
+
+## Performance Testing (Locust)
+
+A Locust load test in `locust/locustfile.py` simulates a realistic customer
+journey with weighted tasks: browsing the catalog, viewing product details,
+placing multi-product orders, and verifying the placed order. Each simulated
+user logs in once, then repeats the journey.
+
+### 1. Start the API and seed data
+
+```bash
+python3 -m seeders.seeders   # seed users, products, and orders
+python3 run.py               # start the API (default: http://127.0.0.1:5000)
+```
+
+### 2. Run Locust
+
+```bash
+# Web UI at http://127.0.0.1:8089
+locust -f locust/locustfile.py --host http://127.0.0.1:5000
+
+# Headless: 10 users, spawn 2/s, run for 1 minute
+locust -f locust/locustfile.py --host http://127.0.0.1:5000 \
+    --users 10 --spawn-rate 2 --run-time 1m --headless
+```
+
+The test logs in as the seeded buyer (`jane@example.com`). Override the
+credentials with the `LOCUST_EMAIL` and `LOCUST_PASSWORD` environment variables.
+
+
+### Test Result
+
+![Locust Result](./images/tests/v2/locust-20260829.png)
 
 ## Troubleshooting
 
