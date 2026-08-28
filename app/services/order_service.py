@@ -40,9 +40,6 @@ class OrderService:
 
     @staticmethod
     def get_all(user_id=None, role=None, filters=None, sort_by='id', order='desc', page=1, limit=10):
-        """
-        Get paginated orders. Admin sees all, others see only their own.
-        """
         query_user_id = None if role == 'admin' else user_id
 
         return OrderRepository.get_all(
@@ -56,10 +53,6 @@ class OrderService:
 
     @staticmethod
     def get_by_id(order_id, user_id=None, role=None):
-        """
-        Get order by ID with ownership check.
-        Admin can view any order, others can only view their own.
-        """
         order = OrderRepository.get_by_id(order_id)
         if not order:
             raise OrderNotFoundError("order not found")
@@ -71,13 +64,6 @@ class OrderService:
 
     @staticmethod
     def create(user_id, data):
-        """
-        Create an order:
-        1. Validate each product exists and is active
-        2. Check stock availability
-        3. Calculate unit_price and sub_total
-        4. Create order with items and deduct stock
-        """
         items_input = data['items']
         items_data = []
 
@@ -110,9 +96,6 @@ class OrderService:
 
     @staticmethod
     def update_status(order_id, data, user_id=None, role=None):
-        """
-        Update order status with ownership check and transition validation.
-        """
         order = OrderRepository.get_active_by_id(order_id)
         if not order:
             raise OrderNotFoundError("order not found")
@@ -131,16 +114,6 @@ class OrderService:
 
     @staticmethod
     def delete(order_id, user_id=None, role=None):
-        """
-        Delete (cancel) an order:
-        - Cannot delete shipped or delivered orders
-        - If status is 'cancelled', just soft-delete
-        - If status is 'waiting_for_payment' or 'processing', cancel + refund stock
-        - Returns refund_note if order was in 'processing' status
-
-        Returns:
-            tuple: (order, refund_note or None)
-        """
         order = OrderRepository.get_active_by_id(order_id)
         if not order:
             raise OrderNotFoundError("order not found")

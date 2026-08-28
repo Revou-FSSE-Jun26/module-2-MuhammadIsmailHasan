@@ -45,16 +45,6 @@ class OrderRepository:
 
     @staticmethod
     def create(user_id, items_data):
-        """
-        Create an order with items and deduct stock.
-
-        Args:
-            user_id: The ID of the user placing the order.
-            items_data: List of dicts with 'product', 'product_id', 'unit_price', 'quantity', 'sub_total'.
-
-        Returns:
-            The created Order instance.
-        """
         total_amount = sum(item['sub_total'] for item in items_data)
 
         order = Order(
@@ -91,7 +81,6 @@ class OrderRepository:
 
     @staticmethod
     def cancel_and_refund_stock(order):
-        """Cancel order, soft-delete, and restore stock for each item."""
         order.status = 'cancelled'
         order.is_active = False
 
