@@ -1,6 +1,6 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from flask import jsonify
+from flask import jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, get_jwt
 
 from app.schemas.order_schema import (
@@ -78,6 +78,10 @@ class OrderList(MethodView):
         except InsufficientStockError as e:
             abort(422, message=str(e))
 
+        current_app.logger.info(
+            'order %s placed by user %s', order.id, current_user_id
+        )
+
         return jsonify({
             'message': 'order created',
             'status': True,
@@ -147,6 +151,10 @@ class OrderDetail(MethodView):
             abort(403, message=str(e))
         except OrderCannotBeDeletedError as e:
             abort(400, message=str(e))
+
+        current_app.logger.info(
+            'order %s cancelled by user %s', order.id, current_user_id
+        )
 
         response_data = {
             'message': 'order cancelled successfully',

@@ -26,3 +26,11 @@ class BaseConfig:
     OPENAPI_URL_PREFIX = '/docs'
     OPENAPI_SWAGGER_UI_PATH = '/swagger-ui'
     OPENAPI_SWAGGER_UI_URL = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist/'
+
+    # ─── Logging ──────────────────────────────────────────────────────────────
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+    LOG_TO_FILE = os.getenv('LOG_TO_FILE', 'true').lower() == 'true'
+    LOG_DIR = os.getenv('LOG_DIR', 'logs')
+    LOG_FILE = os.getenv('LOG_FILE', 'app.log')
+    # Daily rotation: a new file is started at midnight; keep this many days.
+    LOG_BACKUP_COUNT = int(os.getenv('LOG_BACKUP_COUNT', '30'))

@@ -3,6 +3,7 @@ from flask import Flask
 
 from app.extensions import db, jwt, migrate, api
 from app.errors import register_error_handlers
+from app.logging_config import configure_logging
 from config import config_by_name
 
 
@@ -12,6 +13,9 @@ def create_app(config_name=None):
 
     flask_app = Flask(__name__)
     flask_app.config.from_object(config_by_name[config_name])
+
+    # Logging
+    configure_logging(flask_app)
 
     # Initialize extensions
     db.init_app(flask_app)
@@ -33,5 +37,7 @@ def create_app(config_name=None):
 
     # Error handlers
     register_error_handlers(flask_app)
+
+    flask_app.logger.info('application initialized (env=%s)', config_name)
 
     return flask_app

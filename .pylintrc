@@ -1,0 +1,35 @@
+[MAIN]
+# Directories that are not first-party source and should not be linted.
+ignore=venv,migrations,.git,__pycache__,htmlcov
+ignore-paths=^venv/.*$,^migrations/.*$
+
+# Allow SQLAlchemy / marshmallow dynamic attributes without false positives.
+extension-pkg-whitelist=pydantic
+
+[FORMAT]
+max-line-length=120
+
+[DESIGN]
+# This app favors small classes (schemas, services, blueprints) and
+# static-method service classes, so relax the class/method heuristics.
+min-public-methods=0
+max-args=8
+max-attributes=10
+
+[MESSAGES CONTROL]
+# Pragmatic ruleset: keep correctness checks, silence style noise that does
+# not apply to this codebase (docstrings were intentionally removed, Flask
+# and SQLAlchemy patterns trip several checkers).
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-positional-arguments,
+    import-outside-toplevel,
+    broad-exception-caught,
+    duplicate-code
+
+[REPORTS]
+score=yes

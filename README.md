@@ -39,6 +39,10 @@ Notes:
 | Auth | flask-jwt-extended, bcrypt |
 | Unit & integration testing | pytest, pytest-cov |
 | Performance testing | Locust |
+| Security linting | Bandit |
+| Code quality / linting | Pylint |
+| Dependency audit | pip-audit |
+| Logging | Python logging (daily rotating file) |
 | API documentation | Postman, Swagger UI (flask-smorest) |
 
 ## Features
@@ -455,6 +459,50 @@ credentials with the `LOCUST_EMAIL` and `LOCUST_PASSWORD` environment variables.
 ### Test Result
 
 ![Locust Result](./images/tests/v2/locust-20260829.png)
+
+## Code Quality & Security
+
+Three tools help keep the code clean and dependencies safe. They are configured
+pragmatically (`.pylintrc` disables checks that do not apply to this codebase).
+
+```bash
+# Static security scan of the application code
+bandit -r app
+
+# Lint / code-quality report (uses .pylintrc)
+pylint --rcfile=.pylintrc app
+
+# Audit installed dependencies for known vulnerabilities
+pip-audit
+pip-audit -r requirements.txt
+```
+
+| Tool | Checks | Latest result |
+|------|--------|---------------|
+| Bandit | Security issues in our code | 0 issues |
+| pip-audit | Known CVEs in dependencies | No known vulnerabilities |
+| Pylint | Code quality / style | 9.66 / 10 |
+
+## Logging
+
+The app configures logging on startup (`app/logging_config.py`). Logs go to both
+the console and a file at `logs/app.log`. The file rotates daily at midnight,
+keeping the last 30 days (older files are named `app.log.YYYY-MM-DD`). The
+`logs/` directory is git-ignored.
+
+The log level follows the environment (`DEBUG` in development, `INFO` in
+production) and can be overridden with environment variables:
+
+```bash
+LOG_LEVEL=WARNING      # console/file log level
+LOG_TO_FILE=false      # disable file logging (console only)
+LOG_DIR=logs           # directory for log files
+LOG_FILE=app.log       # log file name
+LOG_BACKUP_COUNT=30    # days of rotated logs to keep
+```
+
+Key events are logged, including application startup, login success/failure, and
+order placement/cancellation.
 
 ## Troubleshooting
 

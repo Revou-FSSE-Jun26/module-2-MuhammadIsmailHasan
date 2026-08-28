@@ -16,7 +16,10 @@ class AuthService:
         user = UserRepository.get_by_email(email)
 
         if user is None or not check_password(password, user.password_hash):
+            current_app.logger.warning('failed login attempt for email=%s', email)
             raise InvalidCredentialsError("invalid email or password")
+
+        current_app.logger.info('user %s logged in', user.id)
 
         access_token = create_access_token(
             identity=str(user.id),
