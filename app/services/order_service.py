@@ -1,23 +1,10 @@
 from app.repositories.order_repository import OrderRepository
-
-
-ALLOWED_TRANSITIONS = {
-    'waiting_for_payment': ['processing'],
-    'processing': ['shipped'],
-    'shipped': ['delivered'],
-    'delivered': [],
-    'cancelled': [],
-}
-
-ROLE_ALLOWED_TARGET_STATUSES = {
-    'buyer': set(),
-    'seller': {'processing', 'shipped', 'delivered'},
-    'admin': {'processing', 'shipped', 'delivered'},
-}
-
-UNDELETABLE_STATUSES = ('shipped', 'delivered')
-
-TERMINAL_STATUSES = ('cancelled', 'delivered')
+from app.validation import (
+    ALLOWED_TRANSITIONS,
+    ROLE_ALLOWED_TARGET_STATUSES,
+    UNDELETABLE_STATUSES,
+    TERMINAL_STATUSES,
+)
 
 
 class OrderNotFoundError(Exception):
