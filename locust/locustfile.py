@@ -6,7 +6,16 @@ from locust import HttpUser, TaskSet, task, between, events
 LOGIN_EMAIL = os.getenv("LOCUST_EMAIL", "jane@example.com")
 LOGIN_PASSWORD = os.getenv("LOCUST_PASSWORD", "password456")
 
+SELLER_EMAIL = os.getenv("LOCUST_SELLER_EMAIL", "alice@example.com")
+SELLER_PASSWORD = os.getenv("LOCUST_SELLER_PASSWORD", "passwordabc")
+
 API = "/api/v1"
+
+NEXT_STATUS = {
+    "waiting_for_payment": "processing",
+    "processing": "shipped",
+    "shipped": "delivered",
+}
 
 
 class CustomerJourney(TaskSet):
@@ -99,6 +108,51 @@ class CustomerJourney(TaskSet):
                 resp.failure(f"unexpected status {resp.status_code}")
 
 
+class SellerFulfillment(TaskSet):
+
+    def on_start(self):
+        self.order_ids = []
+
+    @task(3)
+    def list_orders(self):
+        with self.client.get(
+            f"{API}/orders/",
+            name="GET /orders (seller list)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code != 200:
+                resp.failure(f"unexpected status {resp.status_code}")
+                return
+
+            orders = (resp.json() or {}).get("data", [])
+            self.order_ids = [
+                o for o in orders
+                if o.get("status") in NEXT_STATUS
+            ]
+            resp.success()
+
+    @task(2)
+    def advance_status(self):
+        if not self.order_ids:
+            return
+
+        order = random.choice(self.order_ids)
+        target = NEXT_STATUS.get(order.get("status"))
+        if target is None:
+            return
+
+        with self.client.put(
+            f"{API}/orders/{order['id']}",
+            json={"status": target},
+            name="PUT /orders/:id (advance status)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 400, 403):
+                resp.success()
+            else:
+                resp.failure(f"unexpected status {resp.status_code}")
+
+
 class ShopUser(HttpUser):
 
     tasks = [CustomerJourney]
@@ -118,6 +172,29 @@ class ShopUser(HttpUser):
             else:
                 resp.failure(
                     f"login failed ({resp.status_code}); "
+                    f"seed data and check credentials"
+                )
+
+
+class SellerUser(HttpUser):
+
+    tasks = [SellerFulfillment]
+    wait_time = between(2, 5)
+
+    def on_start(self):
+        with self.client.post(
+            f"{API}/auth/login",
+            json={"email": SELLER_EMAIL, "password": SELLER_PASSWORD},
+            name="POST /auth/login (seller)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 200 and (resp.json() or {}).get("access_token"):
+                token = resp.json()["access_token"]
+                self.client.headers.update({"Authorization": f"Bearer {token}"})
+                resp.success()
+            else:
+                resp.failure(
+                    f"seller login failed ({resp.status_code}); "
                     f"seed data and check credentials"
                 )
 

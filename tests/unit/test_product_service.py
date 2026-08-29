@@ -66,6 +66,13 @@ class TestCreate:
         ProductService.create({'name': 'X', 'price': 1, 'stock': 1, 'category_id': 3})
         repo.create.assert_called_once()
 
+    def test_seller_id_is_propagated_to_repository(self, repo, category_model):
+        repo.create.return_value = make_product()
+
+        ProductService.create({'name': 'X', 'price': 1, 'stock': 1}, seller_id=42)
+
+        assert repo.create.call_args.kwargs['seller_id'] == 42
+
     def test_invalid_category(self, repo, category_model):
         set_category_lookup(category_model, None)
         with pytest.raises(CategoryNotFoundError):

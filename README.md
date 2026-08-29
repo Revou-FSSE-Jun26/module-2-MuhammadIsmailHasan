@@ -14,8 +14,8 @@ that account is allowed to do.
 
 | Role | Who they are | What they can do |
 |------|--------------|------------------|
-| **buyer** | A customer who shops on the platform | Browse products and categories, place orders, and view / update / cancel their **own** orders. |
-| **seller** | A merchant who supplies the catalog | Browse products and categories, and create / update / delete products and categories. Sellers do **not** place orders. |
+| **buyer** | A customer who shops on the platform | Browse products and categories, place orders, view their **own** orders, and cancel their own orders. Buyers **cannot** change an order's status; cancelling is done via the delete endpoint. |
+| **seller** | A merchant who supplies the catalog | Browse products and categories, create / update / delete products and categories, and drive the fulfillment status of orders that contain **their own** products. Sellers do **not** place orders. |
 | **admin** | A platform operator | Full access: everything a buyer and seller can do, plus acting on **any** user's orders and deleting **any** user account. |
 
 Notes:
@@ -24,7 +24,13 @@ Notes:
   role is privileged and is provisioned separately (e.g. via the seeder), not
   through the public registration endpoint.
 - **Ownership matters even within a role.** A buyer can only touch their own
-  orders; only an admin can act across users.
+  orders; a seller can only change the status of orders that include one of
+  their own products; only an admin can act across all users and orders.
+- **Products have an owner.** When a seller creates a product it is stamped
+  with their `seller_id`. This ownership is what scopes a seller's control
+  over order status. Products created before this feature have no owner
+  (`seller_id` is null), so only an admin can change the status of orders
+  built from them.
 
 ## Tech Stack
 
@@ -72,6 +78,8 @@ The main rules the system enforces:
 **Products**
 
 - A product's category must exist.
+- A product is owned by the seller who created it (`seller_id`). Admin-created
+  products are owned by that admin.
 - A product can't be deleted while it's part of an active order.
 - Deleting a product hides it instead of erasing it.
 
@@ -80,7 +88,7 @@ The main rules the system enforces:
 - You can only order what's in stock; if any item runs short, the whole order is rejected.
 - Prices and totals are calculated by the server from the product, not sent by the client.
 - Placing an order reduces stock automatically.
-- You can only see and manage your own orders; admins can manage any order.
+- Buyers see and manage only their own orders; sellers and admins can view accordingly, and admins can act on any order.
 - An order moves through fixed steps:
 
   ```
@@ -89,8 +97,21 @@ The main rules the system enforces:
       cancelled          cancelled
   ```
 
-- Shipped and delivered orders can't be cancelled.
-- Cancelling an unshipped order puts the stock back.
+- **Who can change status (`PUT /orders/<id>`):**
+
+  | Role | Allowed |
+  |------|---------|
+  | buyer | Cannot change status at all. Buyers cancel via `DELETE /orders/<id>`. |
+  | seller | Can advance / cancel, but only for orders that contain one of their own products: `waiting_for_payment → processing → shipped → delivered`, and cancel from `waiting_for_payment` or `processing`. |
+  | admin | Any valid transition on any order. |
+
+  A seller acting on an order with no product of theirs gets `403`. If the
+  requested move isn't legal for the order's current status (e.g. skipping a
+  step or going backward), the response is `400`.
+
+- **Cancelling (`DELETE /orders/<id>`):** available to the buyer who owns the
+  order and to admins. Shipped and delivered orders can't be cancelled.
+  Cancelling an unshipped order puts the stock back.
 
 ## Architecture
 
@@ -361,8 +382,8 @@ All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/v1/products/` | List products (filter, sort, paginate) | any role |
-| POST | `/api/v1/products/` | Create a product | seller, admin |
-| GET | `/api/v1/products/<id>` | Get a product | any role |
+| POST | `/api/v1/products/` | Create a product (owned by the creating seller/admin) | seller, admin |
+| GET | `/api/v1/products/<id>` | Get a product (detail includes `seller_id`) | any role |
 | PUT | `/api/v1/products/<id>` | Update a product | seller, admin |
 | DELETE | `/api/v1/products/<id>` | Soft-delete a product | seller, admin |
 
@@ -373,7 +394,7 @@ All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 | GET | `/api/v1/orders/` | List orders (own orders; admin sees all) | any role |
 | POST | `/api/v1/orders/` | Create an order (checks stock, deducts inventory) | buyer, admin |
 | GET | `/api/v1/orders/<id>` | Get an order (owner or admin) | any role |
-| PUT | `/api/v1/orders/<id>` | Update order status (validated transitions) | buyer, admin |
+| PUT | `/api/v1/orders/<id>` | Update order status (seller scoped to own products; validated transitions) | seller, admin |
 | DELETE | `/api/v1/orders/<id>` | Cancel an order (refunds stock where applicable) | buyer, admin |
 
 **Order status transitions:**

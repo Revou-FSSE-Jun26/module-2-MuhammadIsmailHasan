@@ -9,6 +9,12 @@ ALLOWED_TRANSITIONS = {
     'cancelled': [],
 }
 
+ROLE_ALLOWED_TARGET_STATUSES = {
+    'buyer': set(),
+    'seller': {'processing', 'shipped', 'delivered', 'cancelled'},
+    'admin': {'waiting_for_payment', 'processing', 'shipped', 'delivered', 'cancelled'},
+}
+
 UNDELETABLE_STATUSES = ('shipped', 'delivered')
 
 
@@ -100,10 +106,26 @@ class OrderService:
         if not order:
             raise OrderNotFoundError("order not found")
 
-        if role != 'admin' and order.user_id != user_id:
-            raise OrderPermissionError("you don't have permission to update this order")
+        if role == 'admin':
+            pass
+        elif role == 'seller':
+            if not OrderRepository.order_has_seller_product(order.id, user_id):
+                raise OrderPermissionError(
+                    "you don't have permission to update this order"
+                )
+        else:
+            raise OrderPermissionError(
+                "you don't have permission to update this order"
+            )
 
         new_status = data['status']
+
+        role_allowed = ROLE_ALLOWED_TARGET_STATUSES.get(role, set())
+        if new_status not in role_allowed:
+            raise OrderPermissionError(
+                f"role '{role}' cannot set order status to '{new_status}'"
+            )
+
         allowed = ALLOWED_TRANSITIONS.get(order.status, [])
         if new_status not in allowed:
             raise InvalidStatusTransitionError(

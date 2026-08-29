@@ -94,3 +94,14 @@ class OrderRepository:
     @staticmethod
     def get_product_by_id(product_id):
         return Product.query.filter_by(id=product_id, is_active=True).first()
+
+    @staticmethod
+    def order_has_seller_product(order_id, seller_id):
+        exists = db.session.query(OrderItem.id).join(
+            Product, OrderItem.product_id == Product.id
+        ).filter(
+            OrderItem.order_id == order_id,
+            Product.seller_id == seller_id,
+        ).first()
+
+        return exists is not None

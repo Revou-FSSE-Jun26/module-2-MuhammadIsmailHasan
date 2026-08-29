@@ -35,7 +35,7 @@ class ProductService:
         return product
 
     @staticmethod
-    def create(data):
+    def create(data, seller_id=None):
         if data.get('category_id'):
             category = Category.query.filter_by(
                 id=data['category_id'], is_active=True
@@ -43,7 +43,7 @@ class ProductService:
             if not category:
                 raise CategoryNotFoundError("category id not found")
 
-        return ProductRepository.create(data)
+        return ProductRepository.create(data, seller_id=seller_id)
 
     @staticmethod
     def update(product_id, data):

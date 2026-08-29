@@ -172,8 +172,8 @@ class TestGetOrder:
 
 class TestUpdateOrderStatus:
 
-    def test_update_status_valid_transition(self, client, seed_users, seed_order):
-        token = get_auth_token(client, 'buyer@test.com', 'password123')
+    def test_seller_owning_product_can_advance(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
             'status': 'processing'
@@ -183,8 +183,48 @@ class TestUpdateOrderStatus:
         assert response.status_code == 200
         assert data['data']['status'] == 'processing'
 
-    def test_update_status_skip_step(self, client, seed_users, seed_order):
+    def test_admin_can_advance(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'admin@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'processing'
+        }, headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['status'] == 'processing'
+
+    def test_buyer_cannot_update_status(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'processing'
+        }, headers=auth_header(token))
+
+        assert response.status_code == 403
+
+    def test_seller_without_owned_product_forbidden(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller2@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'processing'
+        }, headers=auth_header(token))
+
+        assert response.status_code == 403
+
+    def test_seller_can_cancel(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'cancelled'
+        }, headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['status'] == 'cancelled'
+
+    def test_update_status_skip_step(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
             'status': 'shipped'
@@ -197,7 +237,7 @@ class TestUpdateOrderStatus:
         seed_order.status = 'processing'
         db.session.commit()
 
-        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        token = get_auth_token(client, 'admin@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
             'status': 'waiting_for_payment'
@@ -205,8 +245,20 @@ class TestUpdateOrderStatus:
 
         assert response.status_code == 400
 
+    def test_seller_cannot_target_waiting_for_payment(self, client, seed_users, seed_order, db):
+        seed_order.status = 'processing'
+        db.session.commit()
+
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'waiting_for_payment'
+        }, headers=auth_header(token))
+
+        assert response.status_code == 403
+
     def test_update_status_invalid_value(self, client, seed_users, seed_order):
-        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
             'status': 'flying'
@@ -215,22 +267,13 @@ class TestUpdateOrderStatus:
         assert response.status_code == 422
 
     def test_update_status_not_found(self, client, seed_users):
-        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        token = get_auth_token(client, 'admin@test.com', 'password123')
 
         response = client.put('/api/v1/orders/9999', json={
             'status': 'processing'
         }, headers=auth_header(token))
 
         assert response.status_code == 404
-
-    def test_update_status_other_user_forbidden(self, client, seed_users, seed_order):
-        token = get_auth_token(client, 'seller@test.com', 'password123')
-
-        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'processing'
-        }, headers=auth_header(token))
-
-        assert response.status_code == 403
 
 
 class TestDeleteOrder:

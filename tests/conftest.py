@@ -57,6 +57,12 @@ def seed_users(db):
         password_hash=hash_password('password123'),
         role='seller'
     )
+    seller2 = User(
+        username='seller2_test',
+        email='seller2@test.com',
+        password_hash=hash_password('password123'),
+        role='seller'
+    )
     admin = User(
         username='admin_test',
         email='admin@test.com',
@@ -64,10 +70,10 @@ def seed_users(db):
         role='admin'
     )
 
-    db.session.add_all([buyer, seller, admin])
+    db.session.add_all([buyer, seller, seller2, admin])
     db.session.commit()
 
-    return {'buyer': buyer, 'seller': seller, 'admin': admin}
+    return {'buyer': buyer, 'seller': seller, 'seller2': seller2, 'admin': admin}
 
 
 @pytest.fixture(scope='function')
@@ -82,20 +88,23 @@ def seed_categories(db):
 
 
 @pytest.fixture(scope='function')
-def seed_products(db, seed_categories):
+def seed_products(db, seed_users, seed_categories):
     categories = seed_categories
+    seller = seed_users['seller']
 
     p1 = Product(
         name='Laptop',
         price=999.99,
         stock=10,
-        category_id=categories[0].id
+        category_id=categories[0].id,
+        seller_id=seller.id
     )
     p2 = Product(
         name='T-Shirt',
         price=19.99,
         stock=50,
-        category_id=categories[1].id
+        category_id=categories[1].id,
+        seller_id=seller.id
     )
 
     db.session.add_all([p1, p2])

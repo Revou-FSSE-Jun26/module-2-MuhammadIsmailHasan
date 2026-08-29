@@ -1,6 +1,7 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
 from flask import jsonify
+from flask_jwt_extended import get_jwt_identity
 
 from app.schemas.product_schema import (
     CreateProductSchema,
@@ -61,8 +62,10 @@ class ProductList(MethodView):
     @products_blp.arguments(CreateProductSchema)
     @roles_required('seller', 'admin')
     def post(self, validated_data):
+        current_user_id = int(get_jwt_identity())
+
         try:
-            product = ProductService.create(validated_data)
+            product = ProductService.create(validated_data, seller_id=current_user_id)
         except CategoryNotFoundError as e:
             abort(404, message=str(e))
 

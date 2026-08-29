@@ -59,6 +59,24 @@ class TestCreateProduct:
         assert data['data']['price'] == 599.99
         assert data['data']['stock'] == 25
 
+    def test_create_product_sets_seller_id(self, client, seed_users, seed_categories):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        create = client.post('/api/v1/products/', json={
+            'name': 'Owned Phone',
+            'price': 100,
+            'stock': 5,
+            'category_id': seed_categories[0].id
+        }, headers=auth_header(token))
+        product_id = create.get_json()['data']['id']
+
+        detail = client.get(f'/api/v1/products/{product_id}',
+                            headers=auth_header(token))
+        data = detail.get_json()['data']
+
+        assert 'seller_id' in data
+        assert data['seller_id'] == seed_users['seller'].id
+
     def test_create_product_buyer_forbidden(self, client, seed_users):
         token = get_auth_token(client, 'buyer@test.com', 'password123')
 

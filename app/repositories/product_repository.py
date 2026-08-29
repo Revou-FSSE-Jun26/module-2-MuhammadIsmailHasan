@@ -39,13 +39,14 @@ class ProductRepository:
         return Product.query.filter_by(id=product_id, is_active=True).first()
 
     @staticmethod
-    def create(data):
+    def create(data, seller_id=None):
         product = Product(
             name=data['name'],
             description=data.get('description'),
             price=data['price'],
             stock=data.get('stock', 0),
             category_id=data.get('category_id'),
+            seller_id=seller_id,
         )
         db.session.add(product)
         db.session.commit()

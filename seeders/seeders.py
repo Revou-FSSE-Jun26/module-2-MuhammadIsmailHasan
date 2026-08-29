@@ -117,9 +117,15 @@ def seed_products():
     clothing_cat = Category.query.filter_by(name='Clothing').first()
     food_cat = Category.query.filter_by(name='Food & Beverages').first()
 
+    seller_alice = User.query.filter_by(username='alice_brown').first()
+    seller_charlie = User.query.filter_by(username='charlie_davis').first()
+    alice_id = seller_alice.id if seller_alice else None
+    charlie_id = seller_charlie.id if seller_charlie else None
+
     products_data = [
         {
             'category_id': electronics_cat.id if electronics_cat else None,
+            'seller_id': alice_id,
             'name': 'Laptop Pro 15"',
             'description': 'High-performance laptop with 16GB RAM and 512GB SSD',
             'price': 1299.99,
@@ -127,6 +133,7 @@ def seed_products():
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
+            'seller_id': alice_id,
             'name': 'Wireless Mouse',
             'description': 'Ergonomic wireless mouse with long battery life',
             'price': 29.99,
@@ -134,6 +141,7 @@ def seed_products():
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
+            'seller_id': alice_id,
             'name': 'USB-C Cable',
             'description': '2-meter USB-C charging and data cable',
             'price': 9.99,
@@ -141,6 +149,7 @@ def seed_products():
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
+            'seller_id': alice_id,
             'name': 'Monitor 4K 27"',
             'description': '4K IPS monitor with USB-C connectivity',
             'price': 599.99,
@@ -148,6 +157,7 @@ def seed_products():
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
+            'seller_id': alice_id,
             'name': 'Mechanical Keyboard',
             'description': 'RGB mechanical keyboard with switches',
             'price': 149.99,
@@ -155,6 +165,7 @@ def seed_products():
         },
         {
             'category_id': clothing_cat.id if clothing_cat else None,
+            'seller_id': charlie_id,
             'name': 'Cotton T-Shirt',
             'description': '100% cotton casual t-shirt, available in multiple colors',
             'price': 19.99,
@@ -162,6 +173,7 @@ def seed_products():
         },
         {
             'category_id': clothing_cat.id if clothing_cat else None,
+            'seller_id': charlie_id,
             'name': 'Denim Jeans',
             'description': 'Classic blue denim jeans with comfortable fit',
             'price': 49.99,
@@ -169,6 +181,7 @@ def seed_products():
         },
         {
             'category_id': clothing_cat.id if clothing_cat else None,
+            'seller_id': charlie_id,
             'name': 'Hoodie',
             'description': 'Warm fleece hoodie, perfect for winter',
             'price': 59.99,
@@ -176,6 +189,7 @@ def seed_products():
         },
         {
             'category_id': food_cat.id if food_cat else None,
+            'seller_id': charlie_id,
             'name': 'Organic Coffee Beans',
             'description': 'Premium arabica coffee beans, 1kg pack',
             'price': 15.99,
@@ -183,6 +197,7 @@ def seed_products():
         },
         {
             'category_id': food_cat.id if food_cat else None,
+            'seller_id': charlie_id,
             'name': 'Green Tea',
             'description': 'Organic green tea, 50 tea bags',
             'price': 8.99,
@@ -195,6 +210,7 @@ def seed_products():
         for product_data in products_data:
             product = Product(
                 category_id=product_data['category_id'],
+                seller_id=product_data['seller_id'],
                 name=product_data['name'],
                 description=product_data['description'],
                 price=product_data['price'],

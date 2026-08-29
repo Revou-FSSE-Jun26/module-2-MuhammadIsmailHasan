@@ -129,6 +129,7 @@ class ProductDetailResponseSchema(Schema):
     price = fields.Float()
     stock = fields.Integer()
     description = fields.String()
+    seller_id = fields.Integer(allow_none=True)
     created_at = fields.DateTime(format='iso')
     is_active = fields.Boolean()
     category = fields.Nested(CategoryResponseSchema, allow_none=True)

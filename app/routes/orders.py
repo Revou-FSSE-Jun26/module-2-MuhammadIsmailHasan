@@ -112,7 +112,7 @@ class OrderDetail(MethodView):
         }), 200
 
     @orders_blp.arguments(UpdateOrderStatusSchema)
-    @roles_required('buyer', 'admin')
+    @roles_required('seller', 'admin')
     def put(self, validated_data, order_id):
         claims = get_jwt()
         current_user_id = int(get_jwt_identity())

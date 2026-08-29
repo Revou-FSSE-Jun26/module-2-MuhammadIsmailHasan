@@ -140,39 +140,77 @@ class TestGetAll:
 
 class TestUpdateStatus:
 
-    def test_valid_transition(self, repo):
-        order = make_order(status='waiting_for_payment', user_id=1)
+    def test_buyer_cannot_update_status(self, repo):
+        repo.get_active_by_id.return_value = make_order(status='waiting_for_payment', user_id=1)
+        with pytest.raises(OrderPermissionError):
+            OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='buyer')
+        repo.update_status.assert_not_called()
+
+    def test_seller_valid_transition_when_owns_product(self, repo):
+        order = make_order(status='waiting_for_payment', user_id=99)
+        repo.get_active_by_id.return_value = order
+        repo.order_has_seller_product.return_value = True
+        repo.update_status.return_value = order
+
+        OrderService.update_status(1, {'status': 'processing'}, user_id=7, role='seller')
+
+        repo.order_has_seller_product.assert_called_once_with(order.id, 7)
+        repo.update_status.assert_called_once_with(order, 'processing')
+
+    def test_seller_advances_shipped_to_delivered(self, repo):
+        order = make_order(status='shipped', user_id=99)
+        repo.get_active_by_id.return_value = order
+        repo.order_has_seller_product.return_value = True
+        repo.update_status.return_value = order
+
+        OrderService.update_status(1, {'status': 'delivered'}, user_id=7, role='seller')
+        repo.update_status.assert_called_once_with(order, 'delivered')
+
+    def test_seller_can_cancel_early_order(self, repo):
+        order = make_order(status='processing', user_id=99)
+        repo.get_active_by_id.return_value = order
+        repo.order_has_seller_product.return_value = True
+        repo.update_status.return_value = order
+
+        OrderService.update_status(1, {'status': 'cancelled'}, user_id=7, role='seller')
+        repo.update_status.assert_called_once_with(order, 'cancelled')
+
+    def test_seller_forbidden_when_no_owned_product(self, repo):
+        order = make_order(status='waiting_for_payment', user_id=99)
+        repo.get_active_by_id.return_value = order
+        repo.order_has_seller_product.return_value = False
+
+        with pytest.raises(OrderPermissionError):
+            OrderService.update_status(1, {'status': 'processing'}, user_id=7, role='seller')
+        repo.update_status.assert_not_called()
+
+    def test_admin_valid_transition(self, repo):
+        order = make_order(status='waiting_for_payment', user_id=99)
         repo.get_active_by_id.return_value = order
         repo.update_status.return_value = order
 
-        OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='buyer')
+        OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
         repo.update_status.assert_called_once_with(order, 'processing')
 
     def test_not_found(self, repo):
         repo.get_active_by_id.return_value = None
         with pytest.raises(OrderNotFoundError):
-            OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='buyer')
-
-    def test_forbidden_other_user(self, repo):
-        repo.get_active_by_id.return_value = make_order(user_id=2)
-        with pytest.raises(OrderPermissionError):
-            OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='buyer')
+            OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
 
     def test_skip_step_rejected(self, repo):
-        # waiting_for_payment -> shipped is not allowed
         repo.get_active_by_id.return_value = make_order(status='waiting_for_payment', user_id=1)
         with pytest.raises(InvalidStatusTransitionError):
-            OrderService.update_status(1, {'status': 'shipped'}, user_id=1, role='buyer')
+            OrderService.update_status(1, {'status': 'shipped'}, user_id=1, role='admin')
 
     def test_backward_transition_rejected(self, repo):
         repo.get_active_by_id.return_value = make_order(status='processing', user_id=1)
         with pytest.raises(InvalidStatusTransitionError):
-            OrderService.update_status(1, {'status': 'waiting_for_payment'}, user_id=1, role='buyer')
+            OrderService.update_status(1, {'status': 'waiting_for_payment'}, user_id=1, role='admin')
 
     def test_from_terminal_status_rejected(self, repo):
         repo.get_active_by_id.return_value = make_order(status='delivered', user_id=1)
         with pytest.raises(InvalidStatusTransitionError):
-            OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='buyer')
+            OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
 
 
 class TestDelete:
