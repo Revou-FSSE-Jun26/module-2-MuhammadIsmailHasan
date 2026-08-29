@@ -46,10 +46,19 @@ class OrderService:
 
     @staticmethod
     def get_all(user_id=None, role=None, filters=None, sort_by='id', order='desc', page=1, limit=10):
-        query_user_id = None if role == 'admin' else user_id
+        query_user_id = None
+        query_seller_id = None
+
+        if role == 'admin':
+            pass
+        elif role == 'seller':
+            query_seller_id = user_id
+        else:
+            query_user_id = user_id
 
         return OrderRepository.get_all(
             user_id=query_user_id,
+            seller_id=query_seller_id,
             filters=filters,
             sort_by=sort_by,
             order=order,
@@ -63,7 +72,15 @@ class OrderService:
         if not order:
             raise OrderNotFoundError("order not found")
 
-        if role != 'admin' and order.user_id != user_id:
+        if role == 'admin':
+            return order
+
+        if role == 'seller':
+            if not OrderRepository.order_has_seller_product(order.id, user_id):
+                raise OrderPermissionError("you don't have permission to view this order")
+            return order
+
+        if order.user_id != user_id:
             raise OrderPermissionError("you don't have permission to view this order")
 
         return order

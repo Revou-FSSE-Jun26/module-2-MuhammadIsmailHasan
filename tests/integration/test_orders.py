@@ -162,12 +162,43 @@ class TestGetOrder:
         assert response.status_code == 404
 
     def test_get_order_other_user_forbidden(self, client, seed_users, seed_order):
-        token = get_auth_token(client, 'seller@test.com', 'password123')
+        token = get_auth_token(client, 'seller2@test.com', 'password123')
 
         response = client.get(f'/api/v1/orders/{seed_order.id}',
                               headers=auth_header(token))
 
         assert response.status_code == 403
+
+    def test_get_order_seller_owning_product_can_view(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.get(f'/api/v1/orders/{seed_order.id}',
+                              headers=auth_header(token))
+
+        assert response.status_code == 200
+        assert response.get_json()['data']['id'] == seed_order.id
+
+
+class TestGetOrdersSellerScope:
+
+    def test_seller_sees_orders_with_their_products(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.get('/api/v1/orders/', headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['pagination']['total_items'] >= 1
+        assert seed_order.id in [o['id'] for o in data['data']]
+
+    def test_seller_without_matching_products_sees_none(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller2@test.com', 'password123')
+
+        response = client.get('/api/v1/orders/', headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['pagination']['total_items'] == 0
 
 
 class TestUpdateOrderStatus:

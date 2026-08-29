@@ -124,6 +124,22 @@ class TestGetById:
         with pytest.raises(OrderPermissionError):
             OrderService.get_by_id(3, user_id=1, role='buyer')
 
+    def test_get_seller_can_view_order_with_their_product(self, repo):
+        repo.get_by_id.return_value = make_order(id=3, user_id=999)
+        repo.order_has_seller_product.return_value = True
+
+        result = OrderService.get_by_id(3, user_id=7, role='seller')
+
+        assert result.id == 3
+        repo.order_has_seller_product.assert_called_once_with(3, 7)
+
+    def test_get_seller_without_product_forbidden(self, repo):
+        repo.get_by_id.return_value = make_order(id=3, user_id=999)
+        repo.order_has_seller_product.return_value = False
+
+        with pytest.raises(OrderPermissionError):
+            OrderService.get_by_id(3, user_id=7, role='seller')
+
 
 class TestGetAll:
 
@@ -131,11 +147,19 @@ class TestGetAll:
         OrderService.get_all(user_id=1, role='admin', filters={}, page=1, limit=10)
         kwargs = repo.get_all.call_args.kwargs
         assert kwargs['user_id'] is None
+        assert kwargs['seller_id'] is None
 
-    def test_non_admin_scoped_to_own_orders(self, repo):
+    def test_buyer_scoped_to_own_orders(self, repo):
         OrderService.get_all(user_id=1, role='buyer', filters={}, page=1, limit=10)
         kwargs = repo.get_all.call_args.kwargs
         assert kwargs['user_id'] == 1
+        assert kwargs['seller_id'] is None
+
+    def test_seller_scoped_by_seller_id(self, repo):
+        OrderService.get_all(user_id=7, role='seller', filters={}, page=1, limit=10)
+        kwargs = repo.get_all.call_args.kwargs
+        assert kwargs['seller_id'] == 7
+        assert kwargs['user_id'] is None
 
 
 class TestUpdateStatus:

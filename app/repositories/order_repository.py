@@ -7,19 +7,28 @@ from decimal import Decimal
 class OrderRepository:
 
     @staticmethod
-    def get_all(user_id=None, filters=None, sort_by='id', order='desc', page=1, limit=10):
+    def get_all(user_id=None, seller_id=None, filters=None, sort_by='id', order='desc', page=1, limit=10):
         query = Order.query
 
         if user_id is not None:
             query = query.filter_by(user_id=user_id)
 
+        if seller_id is not None:
+            query = query.join(
+                OrderItem, OrderItem.order_id == Order.id
+            ).join(
+                Product, OrderItem.product_id == Product.id
+            ).filter(
+                Product.seller_id == seller_id
+            ).distinct()
+
         if filters:
             include_deleted = filters.get('include_deleted', False)
             if not include_deleted:
-                query = query.filter_by(is_active=True)
+                query = query.filter(Order.is_active == True)
 
             if filters.get('status'):
-                query = query.filter_by(status=filters['status'])
+                query = query.filter(Order.status == filters['status'])
 
         sort_columns = {
             'id': Order.id,

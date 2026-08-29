@@ -14,8 +14,8 @@ that account is allowed to do.
 
 | Role | Who they are | What they can do |
 |------|--------------|------------------|
-| **buyer** | A customer who shops on the platform | Browse products and categories, place orders, view their **own** orders, and cancel their own orders. Buyers **cannot** change an order's status; cancelling is done via the delete endpoint. |
-| **seller** | A merchant who supplies the catalog | Browse products and categories, create / update / delete products and categories, and drive the fulfillment status of orders that contain **their own** products. Sellers do **not** place orders. |
+| **buyer** | A customer who shops on the platform | Browse products and categories, place orders, view their **own** orders, and cancel their own orders (via `DELETE`). Buyers **cannot** advance an order's status. |
+| **seller** | A merchant who supplies the catalog | Browse products and categories, create / update / delete products and categories, advance the fulfillment status of orders that contain **their own** products, and cancel those orders (via `DELETE`). Sellers do **not** place orders. |
 | **admin** | A platform operator | Full access: everything a buyer and seller can do, plus acting on **any** user's orders and deleting **any** user account. |
 
 Notes:
@@ -88,30 +88,41 @@ The main rules the system enforces:
 - You can only order what's in stock; if any item runs short, the whole order is rejected.
 - Prices and totals are calculated by the server from the product, not sent by the client.
 - Placing an order reduces stock automatically.
-- Buyers see and manage only their own orders; sellers and admins can view accordingly, and admins can act on any order.
-- An order moves through fixed steps:
+- Buyers see and manage only their own orders; sellers see orders that contain their products; admins see and act on any order.
+- Status progression and cancellation are two separate concerns handled by two
+  different endpoints:
 
   ```
-  waiting_for_payment → processing → shipped → delivered
-          ↓                  ↓
-      cancelled          cancelled
+  waiting_for_payment → processing → shipped → delivered   (progression: PUT)
+          │                  │
+          └──────────────────┴──────────────→ cancelled    (cancellation: DELETE)
   ```
 
-- **Who can change status (`PUT /orders/<id>`):**
+- **Progressing status (`PUT /orders/<id>`):** moves an order forward one step
+  along `waiting_for_payment → processing → shipped → delivered`. Cancellation
+  is **not** done here.
 
   | Role | Allowed |
   |------|---------|
-  | buyer | Cannot change status at all. Buyers cancel via `DELETE /orders/<id>`. |
-  | seller | Can advance / cancel, but only for orders that contain one of their own products: `waiting_for_payment → processing → shipped → delivered`, and cancel from `waiting_for_payment` or `processing`. |
-  | admin | Any valid transition on any order. |
+  | buyer | Cannot change status. |
+  | seller | Can advance orders that contain one of their own products. |
+  | admin | Can advance any order. |
 
-  A seller acting on an order with no product of theirs gets `403`. If the
-  requested move isn't legal for the order's current status (e.g. skipping a
-  step or going backward), the response is `400`.
+  A seller acting on an order with no product of theirs gets `403`. An illegal
+  move (skipping a step, going backward) returns `400`. Once an order is
+  `cancelled` or `delivered` it is terminal — any further status change returns
+  `400` with "order is ... and can no longer be modified".
 
-- **Cancelling (`DELETE /orders/<id>`):** available to the buyer who owns the
-  order and to admins. Shipped and delivered orders can't be cancelled.
-  Cancelling an unshipped order puts the stock back.
+- **Cancelling (`DELETE /orders/<id>`):** the single cancel path for everyone.
+  A buyer can cancel their own order; a seller can cancel an order containing
+  one of their products; an admin can cancel any order. Cancellation is
+  identical regardless of who triggers it: the order is set to `cancelled`,
+  soft-deleted, and **the reserved stock is returned**. Cancelling from
+  `processing` also returns a refund note. Shipped and delivered orders cannot
+  be cancelled (`400`).
+
+- **Audit:** every status change and cancellation records the acting user in
+  the order's `updated_by` field.
 
 ## Architecture
 
@@ -391,19 +402,22 @@ All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| GET | `/api/v1/orders/` | List orders (own orders; admin sees all) | any role |
+| GET | `/api/v1/orders/` | List orders (buyer: own; seller: containing their products; admin: all) | any role |
 | POST | `/api/v1/orders/` | Create an order (checks stock, deducts inventory) | buyer, admin |
-| GET | `/api/v1/orders/<id>` | Get an order (owner or admin) | any role |
-| PUT | `/api/v1/orders/<id>` | Update order status (seller scoped to own products; validated transitions) | seller, admin |
-| DELETE | `/api/v1/orders/<id>` | Cancel an order (refunds stock where applicable) | buyer, admin |
+| GET | `/api/v1/orders/<id>` | Get an order (buyer owner, seller of a product in it, or admin) | any role |
+| PUT | `/api/v1/orders/<id>` | Advance order status one step (seller scoped to own products; cannot cancel here) | seller, admin |
+| DELETE | `/api/v1/orders/<id>` | Cancel an order: restores stock, soft-deletes, records `updated_by` | buyer, seller, admin |
 
 **Order status transitions:**
 
 ```
-waiting_for_payment → processing → shipped → delivered
-        ↓                  ↓
-    cancelled          cancelled
+waiting_for_payment → processing → shipped → delivered     (PUT: forward only)
+        │                  │
+        └──────────────────┴──────────────→ cancelled      (DELETE: cancel + restore stock)
 ```
+
+`cancelled` and `delivered` are terminal. Cancelling is only allowed before an
+order ships.
 
 ## Testing
 
