@@ -143,8 +143,8 @@ def validation_order_data(data):
 
 
 ALLOWED_TRANSITIONS = {
-    'waiting_for_payment': ['processing', 'cancelled'],
-    'processing': ['shipped', 'cancelled'],
+    'waiting_for_payment': ['processing'],
+    'processing': ['shipped'],
     'shipped': ['delivered'],
     'delivered': [],
     'cancelled': [],

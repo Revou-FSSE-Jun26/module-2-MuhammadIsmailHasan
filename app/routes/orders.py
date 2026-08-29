@@ -135,14 +135,14 @@ class OrderDetail(MethodView):
             'data': OrderResponseSchema().dump(order),
         }), 200
 
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer', 'seller', 'admin')
     def delete(self, order_id):
         claims = get_jwt()
         current_user_id = int(get_jwt_identity())
         role = claims.get('role')
 
         try:
-            order, refund_note = OrderService.delete(
+            order, refund_note = OrderService.cancel(
                 order_id, user_id=current_user_id, role=role
             )
         except OrderNotFoundError as e:

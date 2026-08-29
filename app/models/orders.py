@@ -20,10 +20,12 @@ class Order(db.Model):
     total_amount = db.Column(db.Numeric(14, 2), nullable=False)
     status = db.Column(db.String(25), nullable=False, server_default='waiting_for_payment')
     ordered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_orders_updated_by'), nullable=True, index=True)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
+    updated_by_user = db.relationship('User', foreign_keys=[updated_by], lazy=True)
 
     def to_dict(self):
         return {
@@ -31,7 +33,8 @@ class Order(db.Model):
             'user_id': self.user_id,
             'total_amount': float(self.total_amount) if self.total_amount is not None else None,
             'status': self.status,
-            'ordered_at': self.ordered_at.isoformat() if self.ordered_at else None
+            'ordered_at': self.ordered_at.isoformat() if self.ordered_at else None,
+            'updated_by': self.updated_by,
         }
 
     def to_dict_detail(self):

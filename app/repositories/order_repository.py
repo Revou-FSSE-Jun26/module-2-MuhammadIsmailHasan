@@ -78,20 +78,17 @@ class OrderRepository:
         return order
 
     @staticmethod
-    def update_status(order, new_status):
+    def update_status(order, new_status, updated_by=None):
         order.status = new_status
+        order.updated_by = updated_by
         db.session.commit()
         return order
 
     @staticmethod
-    def soft_delete(order):
-        order.is_active = False
-        db.session.commit()
-
-    @staticmethod
-    def cancel_and_refund_stock(order):
+    def cancel_order(order, updated_by=None):
         order.status = 'cancelled'
         order.is_active = False
+        order.updated_by = updated_by
 
         for item in order.items:
             product = Product.query.get(item.product_id)
@@ -99,6 +96,7 @@ class OrderRepository:
                 product.stock += item.quantity
 
         db.session.commit()
+        return order
 
     @staticmethod
     def get_product_by_id(product_id):

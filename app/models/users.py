@@ -22,7 +22,7 @@ class User(db.Model):
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
-    orders = db.relationship('Order', backref='buyer', lazy=True)
+    orders = db.relationship('Order', backref='buyer', lazy=True, foreign_keys='Order.user_id')
 
     def to_dict_public(self):
         return {

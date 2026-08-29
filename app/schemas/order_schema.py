@@ -30,8 +30,8 @@ class UpdateOrderStatusSchema(Schema):
     status = fields.String(
         required=True,
         validate=validate.OneOf(
-            ['waiting_for_payment', 'processing', 'shipped', 'delivered', 'cancelled'],
-            error="status must be one of: waiting_for_payment, processing, shipped, delivered, cancelled",
+            ['processing', 'shipped', 'delivered'],
+            error="status must be one of: processing, shipped, delivered",
         ),
         error_messages={"required": "status is required"},
     )
@@ -72,6 +72,7 @@ class OrderResponseSchema(Schema):
     total_amount = fields.Float()
     status = fields.String()
     ordered_at = fields.DateTime(format='iso')
+    updated_by = fields.Integer(allow_none=True)
 
 
 class OrderDetailResponseSchema(Schema):
@@ -80,5 +81,6 @@ class OrderDetailResponseSchema(Schema):
     total_amount = fields.Float()
     status = fields.String()
     ordered_at = fields.DateTime(format='iso')
+    updated_by = fields.Integer(allow_none=True)
     is_active = fields.Boolean()
     items = fields.List(fields.Nested(OrderItemResponseSchema))

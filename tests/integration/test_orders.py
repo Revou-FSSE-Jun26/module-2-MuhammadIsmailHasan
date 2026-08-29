@@ -243,16 +243,15 @@ class TestUpdateOrderStatus:
 
         assert response.status_code == 403
 
-    def test_seller_can_cancel(self, client, seed_users, seed_order):
+    def test_put_cancelled_is_rejected(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
             'status': 'cancelled'
         }, headers=auth_header(token))
-        data = response.get_json()
 
-        assert response.status_code == 200
-        assert data['data']['status'] == 'cancelled'
+        # PUT no longer accepts 'cancelled'; the schema rejects it
+        assert response.status_code == 422
 
     def test_update_status_skip_step(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'seller@test.com', 'password123')
@@ -264,29 +263,30 @@ class TestUpdateOrderStatus:
         assert response.status_code == 400
         assert 'cannot change status' in response.get_json()['message']
 
-    def test_update_status_backward(self, client, seed_users, seed_order, db):
-        seed_order.status = 'processing'
+    def test_update_status_stamps_updated_by(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'processing'
+        }, headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['updated_by'] == seed_users['seller'].id
+
+    def test_update_cancelled_order_rejected(self, client, seed_users, seed_order, db):
+        seed_order.status = 'cancelled'
+        seed_order.is_active = False
         db.session.commit()
 
         token = get_auth_token(client, 'admin@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'waiting_for_payment'
+            'status': 'processing'
         }, headers=auth_header(token))
 
         assert response.status_code == 400
-
-    def test_seller_cannot_target_waiting_for_payment(self, client, seed_users, seed_order, db):
-        seed_order.status = 'processing'
-        db.session.commit()
-
-        token = get_auth_token(client, 'seller@test.com', 'password123')
-
-        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'waiting_for_payment'
-        }, headers=auth_header(token))
-
-        assert response.status_code == 403
+        assert 'can no longer be modified' in response.get_json()['message']
 
     def test_update_status_invalid_value(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'seller@test.com', 'password123')
@@ -343,7 +343,7 @@ class TestDeleteOrder:
                                  headers=auth_header(token))
 
         assert response.status_code == 400
-        assert "cannot delete order with status 'shipped'" in response.get_json()['message']
+        assert "cannot cancel order with status 'shipped'" in response.get_json()['message']
 
     def test_delete_delivered_blocked(self, client, seed_users, seed_order, db):
         seed_order.status = 'delivered'
@@ -355,7 +355,7 @@ class TestDeleteOrder:
                                  headers=auth_header(token))
 
         assert response.status_code == 400
-        assert "cannot delete order with status 'delivered'" in response.get_json()['message']
+        assert "cannot cancel order with status 'delivered'" in response.get_json()['message']
 
     def test_delete_order_not_found(self, client, seed_users):
         token = get_auth_token(client, 'buyer@test.com', 'password123')
@@ -365,8 +365,40 @@ class TestDeleteOrder:
 
         assert response.status_code == 404
 
-    def test_delete_order_other_user_forbidden(self, client, seed_users, seed_order):
+    def test_delete_buyer_other_user_forbidden(self, client, seed_users, seed_order, db):
+        from app.models.users import User
+        from app.auth import hash_password
+
+        other = User(username='other_buyer', email='other@test.com',
+                     password_hash=hash_password('password123'), role='buyer')
+        db.session.add(other)
+        db.session.commit()
+
+        token = get_auth_token(client, 'other@test.com', 'password123')
+        response = client.delete(f'/api/v1/orders/{seed_order.id}',
+                                 headers=auth_header(token))
+
+        assert response.status_code == 403
+
+    def test_seller_owning_product_can_cancel_and_restores_stock(self, client, seed_users, seed_order, seed_products, db):
+        seed_order.status = 'processing'
+        db.session.commit()
+        stock_before = seed_products[0].stock
+        qty = seed_order.items[0].quantity
+
         token = get_auth_token(client, 'seller@test.com', 'password123')
+        response = client.delete(f'/api/v1/orders/{seed_order.id}',
+                                 headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['status'] == 'cancelled'
+        assert data['data']['refund_note'] == 'payment refund will be processed'
+        db.session.refresh(seed_products[0])
+        assert seed_products[0].stock == stock_before + qty
+
+    def test_seller_without_owned_product_forbidden_to_cancel(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller2@test.com', 'password123')
 
         response = client.delete(f'/api/v1/orders/{seed_order.id}',
                                  headers=auth_header(token))

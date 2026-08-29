@@ -165,43 +165,43 @@ class TestGetAll:
 class TestUpdateStatus:
 
     def test_buyer_cannot_update_status(self, repo):
-        repo.get_active_by_id.return_value = make_order(status='waiting_for_payment', user_id=1)
+        repo.get_by_id.return_value = make_order(status='waiting_for_payment', user_id=1)
         with pytest.raises(OrderPermissionError):
             OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='buyer')
         repo.update_status.assert_not_called()
 
-    def test_seller_valid_transition_when_owns_product(self, repo):
+    def test_seller_valid_transition_stamps_updated_by(self, repo):
         order = make_order(status='waiting_for_payment', user_id=99)
-        repo.get_active_by_id.return_value = order
+        repo.get_by_id.return_value = order
         repo.order_has_seller_product.return_value = True
         repo.update_status.return_value = order
 
         OrderService.update_status(1, {'status': 'processing'}, user_id=7, role='seller')
 
         repo.order_has_seller_product.assert_called_once_with(order.id, 7)
-        repo.update_status.assert_called_once_with(order, 'processing')
+        repo.update_status.assert_called_once_with(order, 'processing', updated_by=7)
 
     def test_seller_advances_shipped_to_delivered(self, repo):
         order = make_order(status='shipped', user_id=99)
-        repo.get_active_by_id.return_value = order
+        repo.get_by_id.return_value = order
         repo.order_has_seller_product.return_value = True
         repo.update_status.return_value = order
 
         OrderService.update_status(1, {'status': 'delivered'}, user_id=7, role='seller')
-        repo.update_status.assert_called_once_with(order, 'delivered')
+        repo.update_status.assert_called_once_with(order, 'delivered', updated_by=7)
 
-    def test_seller_can_cancel_early_order(self, repo):
+    def test_seller_cannot_set_cancelled_via_update(self, repo):
         order = make_order(status='processing', user_id=99)
-        repo.get_active_by_id.return_value = order
+        repo.get_by_id.return_value = order
         repo.order_has_seller_product.return_value = True
-        repo.update_status.return_value = order
 
-        OrderService.update_status(1, {'status': 'cancelled'}, user_id=7, role='seller')
-        repo.update_status.assert_called_once_with(order, 'cancelled')
+        with pytest.raises(OrderPermissionError):
+            OrderService.update_status(1, {'status': 'cancelled'}, user_id=7, role='seller')
+        repo.update_status.assert_not_called()
 
     def test_seller_forbidden_when_no_owned_product(self, repo):
         order = make_order(status='waiting_for_payment', user_id=99)
-        repo.get_active_by_id.return_value = order
+        repo.get_by_id.return_value = order
         repo.order_has_seller_product.return_value = False
 
         with pytest.raises(OrderPermissionError):
@@ -210,87 +210,94 @@ class TestUpdateStatus:
 
     def test_admin_valid_transition(self, repo):
         order = make_order(status='waiting_for_payment', user_id=99)
-        repo.get_active_by_id.return_value = order
+        repo.get_by_id.return_value = order
         repo.update_status.return_value = order
 
         OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
-        repo.update_status.assert_called_once_with(order, 'processing')
+        repo.update_status.assert_called_once_with(order, 'processing', updated_by=1)
 
     def test_not_found(self, repo):
-        repo.get_active_by_id.return_value = None
+        repo.get_by_id.return_value = None
         with pytest.raises(OrderNotFoundError):
             OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
 
+    def test_cancelled_order_cannot_be_modified(self, repo):
+        repo.get_by_id.return_value = make_order(status='cancelled', is_active=False, user_id=1)
+        with pytest.raises(InvalidStatusTransitionError):
+            OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
+        repo.update_status.assert_not_called()
+
     def test_skip_step_rejected(self, repo):
-        repo.get_active_by_id.return_value = make_order(status='waiting_for_payment', user_id=1)
+        repo.get_by_id.return_value = make_order(status='waiting_for_payment', user_id=1)
         with pytest.raises(InvalidStatusTransitionError):
             OrderService.update_status(1, {'status': 'shipped'}, user_id=1, role='admin')
 
-    def test_backward_transition_rejected(self, repo):
-        repo.get_active_by_id.return_value = make_order(status='processing', user_id=1)
-        with pytest.raises(InvalidStatusTransitionError):
-            OrderService.update_status(1, {'status': 'waiting_for_payment'}, user_id=1, role='admin')
-
     def test_from_terminal_status_rejected(self, repo):
-        repo.get_active_by_id.return_value = make_order(status='delivered', user_id=1)
+        repo.get_by_id.return_value = make_order(status='delivered', user_id=1)
         with pytest.raises(InvalidStatusTransitionError):
             OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
 
 
-class TestDelete:
+class TestCancel:
 
     def test_not_found(self, repo):
         repo.get_active_by_id.return_value = None
         with pytest.raises(OrderNotFoundError):
-            OrderService.delete(1, user_id=1, role='buyer')
+            OrderService.cancel(1, user_id=1, role='buyer')
 
-    def test_forbidden_other_user(self, repo):
+    def test_buyer_forbidden_other_user(self, repo):
         repo.get_active_by_id.return_value = make_order(user_id=2)
         with pytest.raises(OrderPermissionError):
-            OrderService.delete(1, user_id=1, role='buyer')
+            OrderService.cancel(1, user_id=1, role='buyer')
 
-    def test_shipped_cannot_be_deleted(self, repo):
+    def test_seller_forbidden_when_no_owned_product(self, repo):
+        repo.get_active_by_id.return_value = make_order(user_id=999)
+        repo.order_has_seller_product.return_value = False
+        with pytest.raises(OrderPermissionError):
+            OrderService.cancel(1, user_id=7, role='seller')
+        repo.cancel_order.assert_not_called()
+
+    def test_shipped_cannot_be_cancelled(self, repo):
         repo.get_active_by_id.return_value = make_order(status='shipped', user_id=1)
         with pytest.raises(OrderCannotBeDeletedError):
-            OrderService.delete(1, user_id=1, role='buyer')
+            OrderService.cancel(1, user_id=1, role='buyer')
 
-    def test_delivered_cannot_be_deleted(self, repo):
+    def test_delivered_cannot_be_cancelled(self, repo):
         repo.get_active_by_id.return_value = make_order(status='delivered', user_id=1)
         with pytest.raises(OrderCannotBeDeletedError):
-            OrderService.delete(1, user_id=1, role='buyer')
+            OrderService.cancel(1, user_id=1, role='buyer')
 
-    def test_cancelled_soft_deletes_no_refund(self, repo):
-        order = make_order(status='cancelled', user_id=1)
-        repo.get_active_by_id.return_value = order
-
-        result_order, refund_note = OrderService.delete(1, user_id=1, role='buyer')
-
-        assert refund_note is None
-        repo.soft_delete.assert_called_once_with(order)
-        repo.cancel_and_refund_stock.assert_not_called()
-
-    def test_waiting_for_payment_refunds_stock_no_note(self, repo):
+    def test_buyer_cancels_restores_stock_no_note(self, repo):
         order = make_order(status='waiting_for_payment', user_id=1)
         repo.get_active_by_id.return_value = order
 
-        result_order, refund_note = OrderService.delete(1, user_id=1, role='buyer')
+        _, refund_note = OrderService.cancel(1, user_id=1, role='buyer')
 
         assert refund_note is None
-        repo.cancel_and_refund_stock.assert_called_once_with(order)
-        repo.soft_delete.assert_not_called()
+        repo.cancel_order.assert_called_once_with(order, updated_by=1)
 
-    def test_processing_refunds_stock_with_note(self, repo):
+    def test_processing_cancel_has_refund_note(self, repo):
         order = make_order(status='processing', user_id=1)
         repo.get_active_by_id.return_value = order
 
-        result_order, refund_note = OrderService.delete(1, user_id=1, role='buyer')
+        _, refund_note = OrderService.cancel(1, user_id=1, role='buyer')
 
         assert refund_note == 'payment refund will be processed'
-        repo.cancel_and_refund_stock.assert_called_once_with(order)
+        repo.cancel_order.assert_called_once_with(order, updated_by=1)
 
-    def test_admin_can_delete_other_users_order(self, repo):
+    def test_seller_cancels_owned_order_restores_stock(self, repo):
+        order = make_order(status='processing', user_id=999)
+        repo.get_active_by_id.return_value = order
+        repo.order_has_seller_product.return_value = True
+
+        _, refund_note = OrderService.cancel(1, user_id=7, role='seller')
+
+        assert refund_note == 'payment refund will be processed'
+        repo.cancel_order.assert_called_once_with(order, updated_by=7)
+
+    def test_admin_can_cancel_other_users_order(self, repo):
         order = make_order(status='waiting_for_payment', user_id=999)
         repo.get_active_by_id.return_value = order
 
-        _, refund_note = OrderService.delete(1, user_id=1, role='admin')
-        repo.cancel_and_refund_stock.assert_called_once_with(order)
+        OrderService.cancel(1, user_id=1, role='admin')
+        repo.cancel_order.assert_called_once_with(order, updated_by=1)
