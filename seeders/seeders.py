@@ -6,6 +6,7 @@ Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()
 from app import create_app
 from app.extensions import db
 from app.models import User, Product, Category, Order, OrderItem
+from app.slug import slugify
 import bcrypt
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -212,6 +213,7 @@ def seed_products():
                 category_id=product_data['category_id'],
                 seller_id=product_data['seller_id'],
                 name=product_data['name'],
+                slug=slugify(product_data['name']),
                 description=product_data['description'],
                 price=product_data['price'],
                 stock=product_data['stock']

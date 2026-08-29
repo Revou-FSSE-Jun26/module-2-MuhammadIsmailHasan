@@ -39,9 +39,18 @@ class ProductRepository:
         return Product.query.filter_by(id=product_id, is_active=True).first()
 
     @staticmethod
-    def create(data, seller_id=None):
+    def get_by_slug(slug):
+        return Product.query.filter_by(slug=slug, is_active=True).first()
+
+    @staticmethod
+    def slug_exists(slug):
+        return db.session.query(Product.id).filter_by(slug=slug).first() is not None
+
+    @staticmethod
+    def create(data, seller_id=None, slug=None):
         product = Product(
             name=data['name'],
+            slug=slug,
             description=data.get('description'),
             price=data['price'],
             stock=data.get('stock', 0),

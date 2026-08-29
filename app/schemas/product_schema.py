@@ -112,6 +112,7 @@ class UpdateProductSchema(Schema):
 class ProductResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
+    slug = fields.String()
     price = fields.Float()
     stock = fields.Integer()
 
@@ -126,6 +127,7 @@ class CategoryResponseSchema(Schema):
 class ProductDetailResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
+    slug = fields.String()
     price = fields.Float()
     stock = fields.Integer()
     description = fields.String()

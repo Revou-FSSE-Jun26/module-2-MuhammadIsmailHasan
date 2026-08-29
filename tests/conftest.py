@@ -94,6 +94,7 @@ def seed_products(db, seed_users, seed_categories):
 
     p1 = Product(
         name='Laptop',
+        slug='laptop',
         price=999.99,
         stock=10,
         category_id=categories[0].id,
@@ -101,6 +102,7 @@ def seed_products(db, seed_users, seed_categories):
     )
     p2 = Product(
         name='T-Shirt',
+        slug='t-shirt',
         price=19.99,
         stock=50,
         category_id=categories[1].id,

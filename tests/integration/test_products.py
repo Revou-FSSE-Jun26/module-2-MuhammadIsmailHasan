@@ -58,6 +58,7 @@ class TestCreateProduct:
         assert data['data']['name'] == 'New Phone'
         assert data['data']['price'] == 599.99
         assert data['data']['stock'] == 25
+        assert data['data']['slug'] == 'new-phone'
 
     def test_create_product_sets_seller_id(self, client, seed_users, seed_categories):
         token = get_auth_token(client, 'seller@test.com', 'password123')
@@ -153,6 +154,53 @@ class TestGetProduct:
                               headers=auth_header(token))
 
         assert response.status_code == 404
+
+
+class TestGetProductBySlug:
+
+    def test_get_by_slug_success(self, client, seed_users, seed_products):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/products/slug/laptop',
+                              headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['name'] == 'Laptop'
+        assert data['data']['slug'] == 'laptop'
+
+    def test_get_by_slug_not_found(self, client, seed_users):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/products/slug/does-not-exist',
+                              headers=auth_header(token))
+
+        assert response.status_code == 404
+
+    def test_get_by_slug_deleted_product(self, client, seed_users, seed_products, db):
+        product = seed_products[0]
+        product.is_active = False
+        db.session.commit()
+
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        response = client.get('/api/v1/products/slug/laptop',
+                              headers=auth_header(token))
+
+        assert response.status_code == 404
+
+    def test_duplicate_name_gets_unique_slug(self, client, seed_users, seed_categories):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+        payload = {'name': 'Gadget X', 'price': 10, 'stock': 5}
+
+        first = client.post('/api/v1/products/', json=payload, headers=auth_header(token))
+        second = client.post('/api/v1/products/', json=payload, headers=auth_header(token))
+
+        slug1 = first.get_json()['data']['slug']
+        slug2 = second.get_json()['data']['slug']
+
+        assert slug1 == 'gadget-x'
+        assert slug2 == 'gadget-x-2'
+        assert slug1 != slug2
 
 
 class TestUpdateProduct:

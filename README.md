@@ -80,6 +80,11 @@ The main rules the system enforces:
 - A product's category must exist.
 - A product is owned by the seller who created it (`seller_id`). Admin-created
   products are owned by that admin.
+- Each product has a unique `slug` generated automatically from its name at
+  creation (e.g. `Laptop Pro 15"` → `laptop-pro-15`). Duplicate names get a
+  numeric suffix (`gadget-x`, `gadget-x-2`). The slug is fixed once set —
+  renaming a product does not change it, so links stay stable. Products can be
+  fetched by slug via `GET /products/slug/<slug>`.
 - A product can't be deleted while it's part of an active order.
 - Deleting a product hides it instead of erasing it.
 
@@ -394,7 +399,8 @@ All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 |--------|----------|-------------|--------|
 | GET | `/api/v1/products/` | List products (filter, sort, paginate) | any role |
 | POST | `/api/v1/products/` | Create a product (owned by the creating seller/admin) | seller, admin |
-| GET | `/api/v1/products/<id>` | Get a product (detail includes `seller_id`) | any role |
+| GET | `/api/v1/products/<id>` | Get a product by id (detail includes `seller_id`, `slug`) | any role |
+| GET | `/api/v1/products/slug/<slug>` | Get a product by its slug | any role |
 | PUT | `/api/v1/products/<id>` | Update a product | seller, admin |
 | DELETE | `/api/v1/products/<id>` | Soft-delete a product | seller, admin |
 

@@ -26,6 +26,7 @@ def make_product(id=1, name='Laptop'):
 @pytest.fixture
 def repo():
     with patch('app.services.product_service.ProductRepository') as mock_repo:
+        mock_repo.slug_exists.return_value = False
         yield mock_repo
 
 
@@ -73,11 +74,39 @@ class TestCreate:
 
         assert repo.create.call_args.kwargs['seller_id'] == 42
 
+    def test_slug_generated_from_name(self, repo, category_model):
+        repo.create.return_value = make_product()
+
+        ProductService.create({'name': 'Wireless Mouse', 'price': 1, 'stock': 1})
+
+        assert repo.create.call_args.kwargs['slug'] == 'wireless-mouse'
+
+    def test_slug_collision_gets_suffix(self, repo, category_model):
+        repo.create.return_value = make_product()
+        # first candidate taken, second free
+        repo.slug_exists.side_effect = [True, False]
+
+        ProductService.create({'name': 'Wireless Mouse', 'price': 1, 'stock': 1})
+
+        assert repo.create.call_args.kwargs['slug'] == 'wireless-mouse-2'
+
     def test_invalid_category(self, repo, category_model):
         set_category_lookup(category_model, None)
         with pytest.raises(CategoryNotFoundError):
             ProductService.create({'name': 'X', 'price': 1, 'stock': 1, 'category_id': 99})
         repo.create.assert_not_called()
+
+
+class TestGetBySlug:
+
+    def test_success(self, repo):
+        repo.get_by_slug.return_value = make_product(id=5)
+        assert ProductService.get_by_slug('laptop').id == 5
+
+    def test_not_found(self, repo):
+        repo.get_by_slug.return_value = None
+        with pytest.raises(ProductNotFoundError):
+            ProductService.get_by_slug('nope')
 
 
 class TestUpdate:

@@ -12,6 +12,7 @@ class Product(db.Model):
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id', ondelete='SET NULL', name='fk_products_category_id'), index=True)
     seller_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_products_seller_id'), nullable=True, index=True)
     name = db.Column(db.String(255), nullable=False)
+    slug = db.Column(db.String(300), nullable=False, unique=True, index=True)
     description = db.Column(db.String(1000))
     price = db.Column(db.Numeric(11, 2), nullable=False)
     stock = db.Column(db.Integer, nullable=False, default=0)
@@ -25,6 +26,7 @@ class Product(db.Model):
         return {
             'id': self.id,
             'name': self.name,
+            'slug': self.slug,
             'price': float(self.price) if self.price is not None else None,
             'stock': self.stock,
         }

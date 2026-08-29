@@ -1,6 +1,7 @@
 from app.repositories.product_repository import ProductRepository
 from app.models.categories import Category
 from app.validation import ACTIVE_ORDER_STATUSES
+from app.slug import slugify
 
 
 class ProductNotFoundError(Exception):
@@ -35,6 +36,23 @@ class ProductService:
         return product
 
     @staticmethod
+    def get_by_slug(slug):
+        product = ProductRepository.get_by_slug(slug)
+        if not product:
+            raise ProductNotFoundError("product not found")
+        return product
+
+    @staticmethod
+    def _generate_unique_slug(name):
+        base = slugify(name)
+        candidate = base
+        suffix = 2
+        while ProductRepository.slug_exists(candidate):
+            candidate = f'{base}-{suffix}'
+            suffix += 1
+        return candidate
+
+    @staticmethod
     def create(data, seller_id=None):
         if data.get('category_id'):
             category = Category.query.filter_by(
@@ -43,7 +61,9 @@ class ProductService:
             if not category:
                 raise CategoryNotFoundError("category id not found")
 
-        return ProductRepository.create(data, seller_id=seller_id)
+        slug = ProductService._generate_unique_slug(data['name'])
+
+        return ProductRepository.create(data, seller_id=seller_id, slug=slug)
 
     @staticmethod
     def update(product_id, data):

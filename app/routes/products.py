@@ -76,6 +76,23 @@ class ProductList(MethodView):
         }), 201
 
 
+@products_blp.route('/slug/<string:slug>')
+class ProductBySlug(MethodView):
+
+    @roles_required('seller', 'buyer', 'admin')
+    def get(self, slug):
+        try:
+            product = ProductService.get_by_slug(slug)
+        except ProductNotFoundError as e:
+            abort(404, message=str(e))
+
+        return jsonify({
+            'message': 'success get product',
+            'status': True,
+            'data': ProductDetailResponseSchema().dump(product),
+        }), 200
+
+
 @products_blp.route('/<int:product_id>')
 class ProductDetail(MethodView):
 
