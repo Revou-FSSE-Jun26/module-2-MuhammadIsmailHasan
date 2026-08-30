@@ -4,6 +4,7 @@ from marshmallow import Schema, fields, validate, validates, ValidationError, pr
 class ProductQuerySchema(Schema):
     name = fields.String(load_default=None)
     category_id = fields.Integer(load_default=None)
+    seller_id = fields.Integer(load_default=None)
     min_price = fields.Float(load_default=None)
     max_price = fields.Float(load_default=None)
     sort_by = fields.String(

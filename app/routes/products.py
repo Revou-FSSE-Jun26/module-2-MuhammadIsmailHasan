@@ -35,6 +35,7 @@ class ProductList(MethodView):
         filters = {
             'name': query_params.get('name'),
             'category_id': query_params.get('category_id'),
+            'seller_id': query_params.get('seller_id'),
             'min_price': query_params.get('min_price'),
             'max_price': query_params.get('max_price'),
         }

@@ -36,6 +36,42 @@ class TestGetProducts:
         assert response.status_code == 200
         assert len(data['data']) == 1
 
+    def test_get_products_filter_by_seller(self, client, seed_users, seed_products, db):
+        from app.models.products import Product
+
+        seller2_product = Product(
+            name='Seller2 Gadget',
+            slug='seller2-gadget',
+            price=25.0,
+            stock=5,
+            seller_id=seed_users['seller2'].id,
+        )
+        db.session.add(seller2_product)
+        db.session.commit()
+
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get(
+            f'/api/v1/products/?seller_id={seed_users["seller"].id}',
+            headers=auth_header(token),
+        )
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert len(data['data']) == 2
+        returned_ids = {p['id'] for p in data['data']}
+        assert seller2_product.id not in returned_ids
+
+    def test_get_products_filter_by_seller_no_match(self, client, seed_users, seed_products):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/products/?seller_id=999999',
+                              headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert len(data['data']) == 0
+
     def test_get_products_no_auth(self, client):
         response = client.get('/api/v1/products/')
         assert response.status_code == 401

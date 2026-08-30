@@ -14,6 +14,8 @@ class ProductRepository:
                 query = query.filter(Product.name.ilike(f"%{filters['name']}%"))
             if filters.get('category_id'):
                 query = query.filter_by(category_id=filters['category_id'])
+            if filters.get('seller_id'):
+                query = query.filter_by(seller_id=filters['seller_id'])
             if filters.get('min_price') is not None:
                 query = query.filter(Product.price >= filters['min_price'])
             if filters.get('max_price') is not None:
