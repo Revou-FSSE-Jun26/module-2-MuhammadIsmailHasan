@@ -1,11 +1,3 @@
-"""
-Unit tests for ProductImageService.
-
-ProductImageRepository is mocked so the service logic (product lookup,
-admin/seller-owner authorization, image lookup, no-op updates) runs in
-isolation without a database.
-"""
-
 from types import SimpleNamespace
 from unittest.mock import patch
 
