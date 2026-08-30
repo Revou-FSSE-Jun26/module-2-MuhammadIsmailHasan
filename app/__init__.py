@@ -22,14 +22,26 @@ def create_app(config_name=None):
     jwt.init_app(flask_app)
     migrate.init_app(flask_app, db)
     api.init_app(flask_app)
+    api.spec.components.security_scheme(
+        'BearerAuth',
+        {
+            'type': 'http',
+            'scheme': 'bearer',
+            'bearerFormat': 'JWT',
+            'description': 'Paste the access_token returned by /api/v1/auth/login',
+        },
+    )
+    api.spec.options['security'] = [{'BearerAuth': []}]
 
     # Register smorest blueprints
     from app.routes.products import products_blp
+    from app.routes.product_images import product_images_blp
     from app.routes.users import users_blp
     from app.routes.auth import auth_blp
     from app.routes.categories import categories_blp
     from app.routes.orders import orders_blp
     api.register_blueprint(products_blp)
+    api.register_blueprint(product_images_blp)
     api.register_blueprint(users_blp)
     api.register_blueprint(auth_blp)
     api.register_blueprint(categories_blp)

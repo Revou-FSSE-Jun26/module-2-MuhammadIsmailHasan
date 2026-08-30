@@ -109,12 +109,26 @@ class UpdateProductSchema(Schema):
             raise ValidationError("stock must be number")
 
 
+class ProductImageResponseSchema(Schema):
+    id = fields.Integer()
+    product_id = fields.Integer()
+    url = fields.String()
+    order = fields.Integer()
+    is_active = fields.Boolean()
+    created_at = fields.DateTime(format='iso')
+
+
 class ProductResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
     slug = fields.String()
     price = fields.Float()
     stock = fields.Integer()
+    image = fields.Method('get_primary_image')
+
+    def get_primary_image(self, obj):
+        primary = obj.primary_image
+        return primary.url if primary else None
 
 
 class CategoryResponseSchema(Schema):
@@ -135,3 +149,7 @@ class ProductDetailResponseSchema(Schema):
     created_at = fields.DateTime(format='iso')
     is_active = fields.Boolean()
     category = fields.Nested(CategoryResponseSchema, allow_none=True)
+    images = fields.Method('get_images')
+
+    def get_images(self, obj):
+        return [img.to_dict() for img in obj.active_images]

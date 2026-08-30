@@ -5,7 +5,7 @@ Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()
 
 from app import create_app
 from app.extensions import db
-from app.models import User, Product, Category, Order, OrderItem
+from app.models import User, Product, Category, Order, OrderItem, ProductImage
 from app.slug import slugify
 import bcrypt
 from datetime import datetime, timedelta
@@ -19,6 +19,7 @@ def clear_tables():
     try:
         db.session.query(OrderItem).delete()
         db.session.query(Order).delete()
+        db.session.query(ProductImage).delete()
         db.session.query(Product).delete()
         db.session.query(User).delete()
         db.session.query(Category).delete()
@@ -230,6 +231,40 @@ def seed_products():
         raise
 
 
+def seed_product_images():
+    """Seed images untuk sebagian produk (one-to-many)"""
+    products = Product.query.order_by(Product.id).all()
+
+    if not products:
+        print("Cannot seed product images: no products found")
+        return
+
+    images = []
+    try:
+        for index, product in enumerate(products):
+            # Give the first few products multiple images with different order
+            # so the smallest order is the primary image shown in listings.
+            slug = product.slug or slugify(product.name)
+            image_count = 3 if index < 3 else 1
+            for order in range(image_count):
+                images.append(
+                    ProductImage(
+                        product_id=product.id,
+                        url=f'https://cdn.example.com/products/{slug}-{order + 1}.jpg',
+                        order=order,
+                    )
+                )
+
+        db.session.add_all(images)
+        db.session.commit()
+        print(f"Created {len(images)} product images")
+        return images
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error seeding product images: {e}")
+        raise
+
+
 def seed_orders():
     """Seed orders dengan berbagai status untuk testing"""
     buyer = User.query.filter_by(username='jane_smith').first()
@@ -339,6 +374,7 @@ def seed_test_data():
             seed_categories()
             seed_users()
             seed_products()
+            seed_product_images()
             seed_orders()
 
             print("\n" + "=" * 50)
@@ -349,6 +385,7 @@ def seed_test_data():
             print(f"  Users: {User.query.count()}")
             print(f"  Categories: {Category.query.count()}")
             print(f"  Products: {Product.query.count()}")
+            print(f"  Product Images: {ProductImage.query.count()}")
             print(f"  Orders: {Order.query.count()}")
             print(f"  Order Items: {OrderItem.query.count()}")
 
