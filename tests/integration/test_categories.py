@@ -14,16 +14,47 @@ class TestGetCategories:
         assert len(data['data']) == 2
         assert data['pagination']['total_items'] == 2
 
+    def test_get_categories_list_excludes_products(self, client, seed_users, seed_products):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/categories/', headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert all('products' not in cat for cat in data['data'])
+
     def test_get_categories_with_products(self, client, seed_users, seed_products):
         token = get_auth_token(client, 'buyer@test.com', 'password123')
 
-        response = client.get('/api/v1/categories/?with_products=true',
+        response = client.get('/api/v1/categories/products',
                               headers=auth_header(token))
         data = response.get_json()
 
         assert response.status_code == 200
-        has_products = any('products' in cat for cat in data['data'])
-        assert has_products is True
+        assert data['status'] is True
+        assert all('products' in cat for cat in data['data'])
+        assert 'pagination' in data
+
+        electronics = next(c for c in data['data'] if c['name'] == 'Electronics')
+        assert len(electronics['products']) == 1
+        assert electronics['products'][0]['name'] == 'Laptop'
+
+    def test_get_categories_with_products_no_auth(self, client):
+        response = client.get('/api/v1/categories/products')
+        assert response.status_code == 401
+
+    def test_get_categories_with_products_filter_by_name(
+        self, client, seed_users, seed_products
+    ):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/categories/products?name=elec',
+                              headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert len(data['data']) == 1
+        assert data['data'][0]['name'] == 'Electronics'
 
     def test_get_categories_filter_by_name(self, client, seed_users, seed_categories):
         token = get_auth_token(client, 'buyer@test.com', 'password123')

@@ -42,16 +42,10 @@ class CategoryList(MethodView):
             limit=query_params['limit'],
         )
 
-        with_products = query_params.get('with_products', False)
-        if with_products:
-            data = CategoryDetailResponseSchema(many=True).dump(paginated.items)
-        else:
-            data = CategoryResponseSchema(many=True).dump(paginated.items)
-
         return jsonify({
             'message': 'get all categories success',
             'status': True,
-            'data': data,
+            'data': CategoryResponseSchema(many=True).dump(paginated.items),
             'pagination': {
                 'page': paginated.page,
                 'limit': paginated.per_page,
@@ -73,6 +67,37 @@ class CategoryList(MethodView):
             'status': True,
             'data': CategoryResponseSchema().dump(category),
         }), 201
+
+
+@categories_blp.route('/products')
+class CategoryListWithProducts(MethodView):
+
+    @categories_blp.arguments(CategoryQuerySchema, location='query')
+    @roles_required('seller', 'buyer', 'admin')
+    def get(self, query_params):
+        filters = {
+            'name': query_params.get('name'),
+        }
+
+        paginated = CategoryService.get_all(
+            filters=filters,
+            sort_by=query_params['sort_by'],
+            order=query_params['order'],
+            page=query_params['page'],
+            limit=query_params['limit'],
+        )
+
+        return jsonify({
+            'message': 'get all categories with products success',
+            'status': True,
+            'data': CategoryDetailResponseSchema(many=True).dump(paginated.items),
+            'pagination': {
+                'page': paginated.page,
+                'limit': paginated.per_page,
+                'total_items': paginated.total,
+                'total_pages': paginated.pages,
+            },
+        }), 200
 
 
 @categories_blp.route('/<int:category_id>')

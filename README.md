@@ -57,7 +57,7 @@ Notes:
 - Role-based access control (buyer, seller, admin)
 - Product management (CRUD, filtering, sorting, pagination)
 - Product images (one-to-many, ordered; admin or the owning seller manages them)
-- Product categories (CRUD, optional nested products)
+- Product categories (CRUD, plus a dedicated route listing categories with their products)
 - Order management (creation with stock deduction, status transitions, cancel/refund)
 - Shopping cart (grouped by seller, live-computed totals, checkout to order)
 - Schema-based validation and centralized error handling
@@ -453,7 +453,8 @@ All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| GET | `/api/v1/categories/` | List categories (filter, sort, paginate, `with_products`) | any role |
+| GET | `/api/v1/categories/` | List categories (filter, sort, paginate) | any role |
+| GET | `/api/v1/categories/products` | List categories, each with its products (filter, sort, paginate) | any role |
 | POST | `/api/v1/categories/` | Create a category | seller, admin |
 | GET | `/api/v1/categories/<id>` | Get a category with its products | any role |
 | PUT | `/api/v1/categories/<id>` | Update a category | seller, admin |

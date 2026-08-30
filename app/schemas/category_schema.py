@@ -3,7 +3,6 @@ from marshmallow import Schema, fields, validate, pre_load
 
 class CategoryQuerySchema(Schema):
     name = fields.String(load_default=None)
-    with_products = fields.Boolean(load_default=False)
     sort_by = fields.String(
         load_default='id',
         validate=validate.OneOf(['id', 'name', 'created_at']),

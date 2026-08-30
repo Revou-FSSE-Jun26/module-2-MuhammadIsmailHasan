@@ -76,7 +76,6 @@ class TestCategoryQuerySchema:
         assert result['order'] == 'asc'
         assert result['page'] == 1
         assert result['limit'] == 10
-        assert result['with_products'] is False
 
     def test_invalid_sort_by(self):
         with pytest.raises(ValidationError):
