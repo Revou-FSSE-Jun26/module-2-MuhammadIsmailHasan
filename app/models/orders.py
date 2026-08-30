@@ -1,5 +1,5 @@
-from datetime import datetime
 from app.extensions import db
+from app.utils.timezone import utcnow
 
 
 class Order(db.Model):
@@ -19,7 +19,7 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT', name='fk_orders_user_id'), nullable=False, index=True)
     total_amount = db.Column(db.Numeric(14, 2), nullable=False)
     status = db.Column(db.String(25), nullable=False, server_default='waiting_for_payment')
-    ordered_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ordered_at = db.Column(db.DateTime, default=utcnow)
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_orders_updated_by'), nullable=True, index=True)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)

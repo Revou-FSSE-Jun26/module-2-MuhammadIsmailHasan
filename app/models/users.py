@@ -1,5 +1,5 @@
-from datetime import datetime
 from app.extensions import db
+from app.utils.timezone import utcnow
 
 
 class User(db.Model):
@@ -15,7 +15,7 @@ class User(db.Model):
     username = db.Column(db.String(100), nullable=False, unique=True)
     email = db.Column(db.String(100), nullable=False, unique=True)
     password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
     role = db.Column(db.String(10), nullable=False, server_default='buyer')
     last_login = db.Column(db.DateTime)

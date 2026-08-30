@@ -1,5 +1,5 @@
-from datetime import datetime
 from app.extensions import db
+from app.utils.timezone import utcnow
 
 
 class Cart(db.Model):
@@ -15,8 +15,8 @@ class Cart(db.Model):
         nullable=False,
         index=True,
     )
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
@@ -59,7 +59,7 @@ class CartItem(db.Model):
         index=True,
     )
     quantity = db.Column(db.Integer, nullable=False, default=1)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
     product = db.relationship('Product', lazy=True)
 

@@ -1,5 +1,5 @@
-from datetime import datetime
 from app.extensions import db
+from app.utils.timezone import utcnow
 
 
 class Product(db.Model):
@@ -16,7 +16,7 @@ class Product(db.Model):
     description = db.Column(db.String(1000))
     price = db.Column(db.Numeric(11, 2), nullable=False)
     stock = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 

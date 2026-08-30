@@ -10,8 +10,9 @@ from app.models import (
 )
 from app.slug import slugify
 import bcrypt
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
+from app.utils.timezone import utcnow
 
 app = create_app()
 
@@ -103,7 +104,7 @@ def seed_users():
                 email=user_data['email'],
                 password_hash=password_hash,
                 role=user_data['role'],
-                last_login=datetime.utcnow() - timedelta(days=1)
+                last_login=utcnow() - timedelta(days=1)
             )
             users.append(user)
 
@@ -340,7 +341,7 @@ def seed_orders():
                 total_amount=total_amount,
                 status=order_data['status'],
                 is_active=order_data.get('is_active', True),
-                ordered_at=datetime.utcnow() - timedelta(days=len(orders_data))
+                ordered_at=utcnow() - timedelta(days=len(orders_data))
             )
             db.session.add(order)
             db.session.flush()

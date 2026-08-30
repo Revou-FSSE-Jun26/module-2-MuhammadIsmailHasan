@@ -1,5 +1,5 @@
-from datetime import datetime
 from app.extensions import db
+from app.utils.timezone import utcnow
 
 
 class ProductImage(db.Model):
@@ -18,7 +18,7 @@ class ProductImage(db.Model):
     )
     url = db.Column(db.String(500), nullable=False)
     order = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
