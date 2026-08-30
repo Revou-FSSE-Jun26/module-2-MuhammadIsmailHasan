@@ -9,8 +9,6 @@ from decimal import Decimal
 
 class OrderRepository:
 
-    # Eager-load items -> product -> images so serializing calculated fields
-    # and product detail does not trigger N+1 queries.
     _detail_load = selectinload(Order.items).selectinload(OrderItem.product).selectinload(Product.images)
     _items_load = selectinload(Order.items)
 

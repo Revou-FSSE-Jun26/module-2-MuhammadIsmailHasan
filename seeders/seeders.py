@@ -5,7 +5,9 @@ Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()
 
 from app import create_app
 from app.extensions import db
-from app.models import User, Product, Category, Order, OrderItem, ProductImage
+from app.models import (
+    User, Product, Category, Order, OrderItem, ProductImage, Cart, CartItem
+)
 from app.slug import slugify
 import bcrypt
 from datetime import datetime, timedelta
@@ -17,6 +19,8 @@ app = create_app()
 def clear_tables():
     """Hapus semua data dari table untuk testing fresh"""
     try:
+        db.session.query(CartItem).delete()
+        db.session.query(Cart).delete()
         db.session.query(OrderItem).delete()
         db.session.query(Order).delete()
         db.session.query(ProductImage).delete()
@@ -232,7 +236,6 @@ def seed_products():
 
 
 def seed_product_images():
-    """Seed images untuk sebagian produk (one-to-many)"""
     products = Product.query.order_by(Product.id).all()
 
     if not products:
@@ -242,8 +245,6 @@ def seed_product_images():
     images = []
     try:
         for index, product in enumerate(products):
-            # Give the first few products multiple images with different order
-            # so the smallest order is the primary image shown in listings.
             slug = product.slug or slugify(product.name)
             image_count = 3 if index < 3 else 1
             for order in range(image_count):
@@ -362,6 +363,48 @@ def seed_orders():
         raise
 
 
+def seed_carts():
+    buyer = User.query.filter_by(username='jane_smith').first()
+    if not buyer:
+        print("Cannot seed carts: buyer not found")
+        return
+
+    alice = User.query.filter_by(username='alice_brown').first()
+    charlie = User.query.filter_by(username='charlie_davis').first()
+
+    alice_product = (
+        Product.query.filter_by(seller_id=alice.id).first() if alice else None
+    )
+    charlie_product = (
+        Product.query.filter_by(seller_id=charlie.id).first() if charlie else None
+    )
+
+    picks = [p for p in (alice_product, charlie_product) if p is not None]
+    if not picks:
+        print("Cannot seed carts: no seller products found")
+        return
+
+    try:
+        cart = Cart(user_id=buyer.id)
+        db.session.add(cart)
+        db.session.flush()
+
+        for index, product in enumerate(picks):
+            db.session.add(CartItem(
+                cart_id=cart.id,
+                product_id=product.id,
+                quantity=index + 1,
+            ))
+
+        db.session.commit()
+        print(f"Created 1 cart with {len(picks)} items")
+        return cart
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error seeding carts: {e}")
+        raise
+
+
 def seed_test_data():
     """Run all seeders"""
     with app.app_context():
@@ -376,6 +419,7 @@ def seed_test_data():
             seed_products()
             seed_product_images()
             seed_orders()
+            seed_carts()
 
             print("\n" + "=" * 50)
             print("Test data seeding completed successfully!")
@@ -388,6 +432,8 @@ def seed_test_data():
             print(f"  Product Images: {ProductImage.query.count()}")
             print(f"  Orders: {Order.query.count()}")
             print(f"  Order Items: {OrderItem.query.count()}")
+            print(f"  Carts: {Cart.query.count()}")
+            print(f"  Cart Items: {CartItem.query.count()}")
 
         except Exception as e:
             print(f"\nSeeding failed: {e}")

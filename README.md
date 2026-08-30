@@ -56,8 +56,10 @@ Notes:
 - User management (registration, JWT login/refresh)
 - Role-based access control (buyer, seller, admin)
 - Product management (CRUD, filtering, sorting, pagination)
+- Product images (one-to-many, ordered; admin or the owning seller manages them)
 - Product categories (CRUD, optional nested products)
 - Order management (creation with stock deduction, status transitions, cancel/refund)
+- Shopping cart (grouped by seller, live-computed totals, checkout to order)
 - Schema-based validation and centralized error handling
 
 ## Business Logic
@@ -129,6 +131,53 @@ The main rules the system enforces:
 - **Audit:** every status change and cancellation records the acting user in
   the order's `updated_by` field.
 
+**Product images**
+
+- A product has many images. Each image has a `url`, an `order`, and an
+  `is_active` flag.
+- Images are always returned sorted by `order` ascending, so the smallest
+  `order` is the primary image. Product list responses expose that single
+  primary `image`; the product detail response includes the full `images`
+  list. Deleting an image is a soft delete (`is_active = false`).
+- Only an **admin** or the **seller who owns the product** can add, update, or
+  delete a product's images. Everyone else gets `403`.
+
+**Cart**
+
+- Each buyer has one active cart. It is created lazily the first time they add
+  an item, so there is no explicit "create cart" step.
+- A cart item stores only a `product_id` and a `quantity` — never a price or a
+  stock snapshot. Prices, subtotals, and totals are computed **live** from the
+  current product every time the cart is read. A price change or a stock change
+  is therefore reflected on the next read with no synchronization code.
+- **Availability is derived, not stored.** Each cart item is flagged
+  `available: false` (with an explanatory `note`) when its product is inactive
+  or when current stock is below the cart quantity. Because this is computed
+  from live product state, stock changes from *any* source — another buyer's
+  order, an order cancellation restoring stock, a seller editing stock — show up
+  automatically the next time the cart is fetched.
+- The cart is **grouped by seller** in the response: items are bucketed by the
+  product's `seller_id`, each group carrying its own item count, quantity, and
+  subtotal, alongside a cart-wide grand total. Items whose product has no owner
+  fall into an "Unknown seller" group.
+- **Adding** a product already in the cart accumulates its quantity. Stock is
+  validated on add and on update (setting quantity to `0` removes the line).
+- **Checkout (`POST /cart/checkout`)** converts the cart into an order by
+  reusing the same order-creation logic (stock re-validation and stock
+  deduction happen there), then removes **only the products that were ordered**
+  from the cart — not a blanket clear. An item that has gone unavailable aborts
+  the whole checkout (`409`) so the buyer can fix the cart first.
+- **Partial / per-seller checkout.** The checkout body optionally narrows what
+  is ordered: `seller_id` checks out just that seller's group, `cart_item_ids`
+  checks out a chosen set of lines, and no body checks out everything. The two
+  selectors are mutually exclusive. Whatever is ordered is removed from the
+  cart while the untouched items remain, so a buyer can pay one seller now and
+  the rest later. Each checkout still produces a single order.
+- **Direct orders and the cart are independent.** Placing an order through
+  `POST /orders` does not touch the cart; only the cart's own checkout removes
+  items. (If the same product sits in the cart, its availability simply updates
+  live as described above.)
+
 ## Architecture
 
 Each domain (users, auth, categories, products, orders) is organized into layers:
@@ -155,29 +204,39 @@ module-2/
 │   │   ├── users.py
 │   │   ├── categories.py
 │   │   ├── products.py
-│   │   └── orders.py
+│   │   ├── product_images.py
+│   │   ├── orders.py
+│   │   └── carts.py
 │   ├── schemas/               # marshmallow schemas (validation + serialization)
 │   │   ├── user_schema.py
 │   │   ├── category_schema.py
 │   │   ├── product_schema.py
-│   │   └── order_schema.py
+│   │   ├── product_image_schema.py
+│   │   ├── order_schema.py
+│   │   └── cart_schema.py
 │   ├── repositories/          # data access layer
 │   │   ├── user_repository.py
 │   │   ├── category_repository.py
 │   │   ├── product_repository.py
-│   │   └── order_repository.py
+│   │   ├── product_image_repository.py
+│   │   ├── order_repository.py
+│   │   └── cart_repository.py
 │   ├── services/              # business logic layer
 │   │   ├── auth_service.py
 │   │   ├── user_service.py
 │   │   ├── category_service.py
 │   │   ├── product_service.py
-│   │   └── order_service.py
+│   │   ├── product_image_service.py
+│   │   ├── order_service.py
+│   │   └── cart_service.py
 │   └── routes/                # flask-smorest blueprints (MethodView)
 │       ├── auth.py
 │       ├── users.py
 │       ├── categories.py
 │       ├── products.py
-│       └── orders.py
+│       ├── product_images.py
+│       ├── orders.py
+│       └── carts.py
 ├── config/                    # base / development / production configs
 ├── migrations/                # Flask-Migrate (Alembic) migrations
 ├── seeders/                   # database seeding (users, categories, products, orders)
@@ -188,13 +247,17 @@ module-2/
 │   │   ├── test_user_service.py
 │   │   ├── test_category_service.py
 │   │   ├── test_product_service.py
-│   │   └── test_order_service.py
+│   │   ├── test_product_image_service.py
+│   │   ├── test_order_service.py
+│   │   └── test_cart_service.py
 │   └── integration/           # full HTTP-through-stack tests
 │       ├── test_auth.py
 │       ├── test_users.py
 │       ├── test_categories.py
 │       ├── test_products.py
-│       └── test_orders.py
+│       ├── test_product_images.py
+│       ├── test_orders.py
+│       └── test_cart.py
 ├── locust/
 │   └── locustfile.py          # performance / load test (customer journey)
 ├── images/                    # diagrams and test-result evidence
@@ -210,8 +273,11 @@ module-2/
 | `users` | User accounts with authentication and roles |
 | `categories` | Product categories |
 | `products` | Product information |
+| `product_images` | Product images (one-to-many, ordered) |
 | `orders` | Customer orders |
 | `order_items` | Line items within each order |
+| `carts` | One active shopping cart per buyer |
+| `cart_items` | Products a buyer intends to order (product + quantity) |
 
 ### Database Diagram
 
@@ -404,6 +470,15 @@ All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 | PUT | `/api/v1/products/<id>` | Update a product | seller, admin |
 | DELETE | `/api/v1/products/<id>` | Soft-delete a product | seller, admin |
 
+### Product Images
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/products/<product_id>/images/` | List a product's active images (ordered by `order` asc) | any role |
+| POST | `/api/v1/products/<product_id>/images/` | Add an image | admin, owning seller |
+| PUT | `/api/v1/products/<product_id>/images/<id>` | Update an image (`url`, `order`) | admin, owning seller |
+| DELETE | `/api/v1/products/<product_id>/images/<id>` | Soft-delete an image | admin, owning seller |
+
 ### Orders
 
 | Method | Endpoint | Description | Access |
@@ -424,6 +499,30 @@ waiting_for_payment → processing → shipped → delivered     (PUT: forward o
 
 `cancelled` and `delivered` are terminal. Cancelling is only allowed before an
 order ships.
+
+### Cart
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/cart` | Get the current buyer's cart, grouped by seller with live totals | buyer, admin |
+| POST | `/api/v1/cart/items` | Add a product (accumulates quantity if already present) | buyer, admin |
+| PUT | `/api/v1/cart/items/<id>` | Set an item's quantity (`0` removes it) | buyer, admin |
+| DELETE | `/api/v1/cart/items/<id>` | Remove a single item | buyer, admin |
+| DELETE | `/api/v1/cart` | Clear the whole cart | buyer, admin |
+| POST | `/api/v1/cart/checkout` | Convert the cart into an order and remove the ordered items. Optional body selects a subset (see below) | buyer, admin |
+
+**Checkout selection (optional JSON body):**
+
+| Body | Effect |
+|------|--------|
+| _(none)_ | Check out the whole cart |
+| `{ "seller_id": 10 }` | Check out only that seller's items (per-seller checkout) |
+| `{ "cart_item_ids": [5, 8] }` | Check out only those cart items (partial checkout) |
+
+`seller_id` and `cart_item_ids` are mutually exclusive (sending both returns
+`422`). A `seller_id` with no matching items, or an unknown cart item id,
+returns `404`. Only the checked-out items are removed from the cart; the rest
+stay. Selection still produces a single order.
 
 ## Testing
 
@@ -544,6 +643,20 @@ LOG_BACKUP_COUNT=30    # days of rotated logs to keep
 
 Key events are logged, including application startup, login success/failure, and
 order placement/cancellation.
+
+## Future Improvements
+
+- **Concurrency-safe stock deduction.** Order creation currently reads a
+  product's stock, checks it against the requested quantity, and writes the
+  reduced value (a read-modify-write with no row lock). Under simultaneous
+  checkouts two requests can both read the same stock, both pass the check, and
+  both deduct — an oversell. The fix is to make the deduction atomic, either by
+  locking the product rows during order creation (`SELECT ... FOR UPDATE` via
+  SQLAlchemy's `with_for_update()`) or with a conditional update
+  (`UPDATE products SET stock = stock - :qty WHERE id = :id AND stock >= :qty`)
+  and treating a zero-row result as insufficient stock. This is independent of
+  the cart, whose availability is already derived from live stock. Deferred for
+  a later iteration.
 
 ## Troubleshooting
 
