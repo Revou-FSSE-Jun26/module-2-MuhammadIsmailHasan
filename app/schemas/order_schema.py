@@ -57,6 +57,21 @@ class OrderQuerySchema(Schema):
     limit = fields.Integer(load_default=10, validate=validate.Range(min=1, max=100))
 
 
+class OrderItemProductSchema(Schema):
+    id = fields.Integer()
+    name = fields.String()
+    slug = fields.String()
+    price = fields.Float()
+    stock = fields.Integer()
+    description = fields.String()
+    is_active = fields.Boolean()
+    image = fields.Method('get_primary_image')
+
+    def get_primary_image(self, obj):
+        primary = obj.primary_image
+        return primary.url if primary else None
+
+
 class OrderItemResponseSchema(Schema):
     id = fields.Integer()
     product_id = fields.Integer()
@@ -64,6 +79,7 @@ class OrderItemResponseSchema(Schema):
     unit_price = fields.Float()
     quantity = fields.Integer()
     sub_total = fields.Float()
+    product = fields.Nested(OrderItemProductSchema, allow_none=True)
 
 
 class OrderResponseSchema(Schema):
@@ -73,6 +89,14 @@ class OrderResponseSchema(Schema):
     status = fields.String()
     ordered_at = fields.DateTime(format='iso')
     updated_by = fields.Integer(allow_none=True)
+    total_items = fields.Method('get_total_items')
+    total_quantity = fields.Method('get_total_quantity')
+
+    def get_total_items(self, obj):
+        return len(obj.items)
+
+    def get_total_quantity(self, obj):
+        return sum(item.quantity for item in obj.items)
 
 
 class OrderDetailResponseSchema(Schema):
@@ -83,4 +107,12 @@ class OrderDetailResponseSchema(Schema):
     ordered_at = fields.DateTime(format='iso')
     updated_by = fields.Integer(allow_none=True)
     is_active = fields.Boolean()
+    total_items = fields.Method('get_total_items')
+    total_quantity = fields.Method('get_total_quantity')
     items = fields.List(fields.Nested(OrderItemResponseSchema))
+
+    def get_total_items(self, obj):
+        return len(obj.items)
+
+    def get_total_quantity(self, obj):
+        return sum(item.quantity for item in obj.items)

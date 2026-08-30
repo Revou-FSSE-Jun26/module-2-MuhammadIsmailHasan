@@ -404,3 +404,136 @@ class TestDeleteOrder:
                                  headers=auth_header(token))
 
         assert response.status_code == 403
+
+
+class TestOrderItemCalculations:
+
+    @pytest.fixture
+    def seed_multi_item_order(self, db, seed_users, seed_products):
+        buyer = seed_users['buyer']
+        p1, p2 = seed_products[0], seed_products[1]
+
+        order = Order(user_id=buyer.id, total_amount=0, status='processing')
+        db.session.add(order)
+        db.session.flush()
+
+        db.session.add(OrderItem(
+            order_id=order.id, product_id=p1.id,
+            unit_price=p1.price, quantity=2, sub_total=p1.price * 2,
+        ))
+        db.session.add(OrderItem(
+            order_id=order.id, product_id=p2.id,
+            unit_price=p2.price, quantity=3, sub_total=p2.price * 3,
+        ))
+        db.session.commit()
+        return order
+
+    def test_get_all_includes_total_items_and_quantity(
+        self, client, seed_users, seed_multi_item_order
+    ):
+        order = seed_multi_item_order
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/orders/', headers=auth_header(token))
+        data = response.get_json()
+
+        target = next(o for o in data['data'] if o['id'] == order.id)
+        assert target['total_items'] == 2
+        assert target['total_quantity'] == 5
+
+    def test_get_all_empty_counts_for_no_items(self, client, seed_users, db):
+        buyer = seed_users['buyer']
+        order = Order(user_id=buyer.id, total_amount=0, status='processing')
+        db.session.add(order)
+        db.session.commit()
+
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        response = client.get('/api/v1/orders/', headers=auth_header(token))
+        data = response.get_json()
+
+        target = next(o for o in data['data'] if o['id'] == order.id)
+        assert target['total_items'] == 0
+        assert target['total_quantity'] == 0
+
+
+class TestOrderItemProductDetail:
+
+    @pytest.fixture
+    def seed_order_with_images(self, db, seed_users, seed_products):
+        from app.models.product_images import ProductImage
+
+        buyer = seed_users['buyer']
+        product = seed_products[0]
+
+        db.session.add_all([
+            ProductImage(product_id=product.id, url='http://img/c.jpg', order=2),
+            ProductImage(product_id=product.id, url='http://img/a.jpg', order=0),
+            ProductImage(product_id=product.id, url='http://img/b.jpg', order=1),
+            ProductImage(product_id=product.id, url='http://img/gone.jpg',
+                         order=3, is_active=False),
+        ])
+
+        order = Order(user_id=buyer.id, total_amount=product.price,
+                      status='processing')
+        db.session.add(order)
+        db.session.flush()
+        db.session.add(OrderItem(
+            order_id=order.id, product_id=product.id,
+            unit_price=product.price, quantity=1, sub_total=product.price,
+        ))
+        db.session.commit()
+        return order, product
+
+    def test_get_by_id_item_has_product_detail(
+        self, client, seed_users, seed_order_with_images
+    ):
+        order, product = seed_order_with_images
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get(f'/api/v1/orders/{order.id}',
+                              headers=auth_header(token))
+        data = response.get_json()['data']
+
+        item = data['items'][0]
+        assert 'product' in item
+        assert item['product']['id'] == product.id
+        assert item['product']['name'] == product.name
+        assert item['product']['slug'] == product.slug
+
+    def test_get_by_id_product_primary_image_is_smallest_order(
+        self, client, seed_users, seed_order_with_images
+    ):
+        order, _ = seed_order_with_images
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get(f'/api/v1/orders/{order.id}',
+                              headers=auth_header(token))
+        product = response.get_json()['data']['items'][0]['product']
+
+        assert product['image'] == 'http://img/a.jpg'
+
+    def test_get_by_id_product_has_no_images_list(
+        self, client, seed_users, seed_order_with_images
+    ):
+        order, _ = seed_order_with_images
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get(f'/api/v1/orders/{order.id}',
+                              headers=auth_header(token))
+        product = response.get_json()['data']['items'][0]['product']
+
+        # Order detail only carries the primary image, not the full list.
+        assert 'image' in product
+        assert 'images' not in product
+
+    def test_get_all_does_not_embed_product_detail(
+        self, client, seed_users, seed_order_with_images
+    ):
+        order, _ = seed_order_with_images
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/orders/', headers=auth_header(token))
+        target = next(o for o in response.get_json()['data'] if o['id'] == order.id)
+
+        assert 'items' not in target
+        assert 'product' not in target

@@ -1,14 +1,22 @@
+from sqlalchemy.orm import selectinload
+
 from app.models.orders import Order, OrderItem
 from app.models.products import Product
+from app.models.product_images import ProductImage
 from app.extensions import db
 from decimal import Decimal
 
 
 class OrderRepository:
 
+    # Eager-load items -> product -> images so serializing calculated fields
+    # and product detail does not trigger N+1 queries.
+    _detail_load = selectinload(Order.items).selectinload(OrderItem.product).selectinload(Product.images)
+    _items_load = selectinload(Order.items)
+
     @staticmethod
     def get_all(user_id=None, seller_id=None, filters=None, sort_by='id', order='desc', page=1, limit=10):
-        query = Order.query
+        query = Order.query.options(OrderRepository._items_load)
 
         if user_id is not None:
             query = query.filter_by(user_id=user_id)
@@ -46,7 +54,12 @@ class OrderRepository:
 
     @staticmethod
     def get_by_id(order_id):
-        return Order.query.filter_by(id=order_id).first()
+        return (
+            Order.query
+            .options(OrderRepository._detail_load)
+            .filter_by(id=order_id)
+            .first()
+        )
 
     @staticmethod
     def get_active_by_id(order_id):
