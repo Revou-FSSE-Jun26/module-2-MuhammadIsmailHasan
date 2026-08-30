@@ -55,6 +55,8 @@ Notes:
 
 - User management (registration, JWT login/refresh)
 - Role-based access control (buyer, seller, admin)
+- User profile (one-to-one with the user; full name, phone, avatar)
+- Shipping address book (one-to-many; buyers keep multiple addresses with exactly one default)
 - Product management (CRUD, filtering, sorting, pagination)
 - Product images (one-to-many, ordered; admin or the owning seller manages them)
 - Product categories (CRUD, plus a dedicated route listing categories with their products)
@@ -71,6 +73,33 @@ The main rules the system enforces:
 - Passwords are stored securely (hashed), never in plain text.
 - Usernames and emails must be unique.
 - You can delete your own account; admins can delete anyone.
+
+**Profiles**
+
+- Every user (buyer, seller, or admin) has at most one profile — a one-to-one
+  extension of the account holding `full_name`, `phone`, and `avatar_url`.
+- There is no separate "create profile" step. The first `PUT /profile` creates
+  it; subsequent calls update the same record (upsert). `GET /profile` returns
+  `404` until the profile has been saved at least once.
+- A user only ever reads or writes their **own** profile, identified from the
+  JWT.
+
+**Addresses**
+
+- Addresses are a **buyer** concern. Sellers and admins do not ship orders to
+  themselves, so the endpoints are scoped to `buyer` (and `admin` for support),
+  matching the cart. A seller calling them gets `403`.
+- A buyer can keep **many** addresses, but **exactly one is the default** at any
+  time — this is the address checkout will use. The rule is enforced in the
+  service layer:
+  - The **first** address a buyer adds automatically becomes the default.
+  - Setting a new default (`PUT /addresses/<id>/default`, or `is_default: true`
+    on create/update) unsets the previous one, so there is never more than one.
+  - You **cannot delete the default while other addresses exist** (`409`); pick
+    a new default first. Deleting the *last* remaining address is allowed.
+- A database-level partial unique index (`is_default = true` per user) backs up
+  the service rule, so two defaults can never be persisted.
+- Deleting an address is a soft delete (`is_active = false`).
 
 **Categories**
 
@@ -206,9 +235,13 @@ module-2/
 │   │   ├── products.py
 │   │   ├── product_images.py
 │   │   ├── orders.py
-│   │   └── carts.py
+│   │   ├── carts.py
+│   │   ├── user_profiles.py
+│   │   └── user_addresses.py
 │   ├── schemas/               # marshmallow schemas (validation + serialization)
 │   │   ├── user_schema.py
+│   │   ├── user_profile_schema.py
+│   │   ├── user_address_schema.py
 │   │   ├── category_schema.py
 │   │   ├── product_schema.py
 │   │   ├── product_image_schema.py
@@ -216,6 +249,8 @@ module-2/
 │   │   └── cart_schema.py
 │   ├── repositories/          # data access layer
 │   │   ├── user_repository.py
+│   │   ├── user_profile_repository.py
+│   │   ├── user_address_repository.py
 │   │   ├── category_repository.py
 │   │   ├── product_repository.py
 │   │   ├── product_image_repository.py
@@ -224,6 +259,8 @@ module-2/
 │   ├── services/              # business logic layer
 │   │   ├── auth_service.py
 │   │   ├── user_service.py
+│   │   ├── user_profile_service.py
+│   │   ├── user_address_service.py
 │   │   ├── category_service.py
 │   │   ├── product_service.py
 │   │   ├── product_image_service.py
@@ -232,6 +269,8 @@ module-2/
 │   └── routes/                # flask-smorest blueprints (MethodView)
 │       ├── auth.py
 │       ├── users.py
+│       ├── user_profiles.py
+│       ├── user_addresses.py
 │       ├── categories.py
 │       ├── products.py
 │       ├── product_images.py
@@ -239,7 +278,7 @@ module-2/
 │       └── carts.py
 ├── config/                    # base / development / production configs
 ├── migrations/                # Flask-Migrate (Alembic) migrations
-├── seeders/                   # database seeding (users, categories, products, orders)
+├── seeders/                   # database seeding (users, profiles, addresses, categories, products, orders)
 ├── tests/
 │   ├── conftest.py            # shared fixtures (app, db, client, seeders)
 │   ├── unit/                  # fast, isolated tests (mocked repositories)
@@ -249,10 +288,14 @@ module-2/
 │   │   ├── test_product_service.py
 │   │   ├── test_product_image_service.py
 │   │   ├── test_order_service.py
-│   │   └── test_cart_service.py
+│   │   ├── test_cart_service.py
+│   │   ├── test_user_profile_service.py
+│   │   └── test_user_address_service.py
 │   └── integration/           # full HTTP-through-stack tests
 │       ├── test_auth.py
 │       ├── test_users.py
+│       ├── test_profiles.py
+│       ├── test_addresses.py
 │       ├── test_categories.py
 │       ├── test_products.py
 │       ├── test_product_images.py
@@ -271,6 +314,8 @@ module-2/
 | Table | Purpose |
 |-------|---------|
 | `users` | User accounts with authentication and roles |
+| `user_profiles` | One-to-one profile per user (full name, phone, avatar) |
+| `user_addresses` | Buyer shipping addresses (one-to-many, one default per user) |
 | `categories` | Product categories |
 | `products` | Product information |
 | `product_images` | Product images (one-to-many, ordered) |
@@ -448,6 +493,30 @@ All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 | GET | `/api/v1/users/me` | Get current user | authenticated |
 | GET | `/api/v1/users/<id>` | Get user by ID | authenticated |
 | DELETE | `/api/v1/users/<id>` | Delete a user (own account or admin) | authenticated |
+
+### Profile
+
+The current user's one-to-one profile. `PUT` upserts (creates on first call,
+updates afterwards).
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/profile` | Get the current user's profile (`404` if not yet created) | buyer, seller, admin |
+| PUT | `/api/v1/profile` | Create or update the current user's profile | buyer, seller, admin |
+
+### Addresses
+
+A buyer's shipping address book. Exactly one address is the default at any time
+(enforced in the service layer).
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/addresses` | List the current buyer's addresses (default first) | buyer, admin |
+| POST | `/api/v1/addresses` | Add an address (first one becomes default; `is_default: true` promotes it) | buyer, admin |
+| GET | `/api/v1/addresses/<id>` | Get one address | buyer, admin |
+| PUT | `/api/v1/addresses/<id>` | Update an address (`is_default: true` promotes it to default) | buyer, admin |
+| DELETE | `/api/v1/addresses/<id>` | Soft-delete an address (`409` if it is the default and others exist) | buyer, admin |
+| PUT | `/api/v1/addresses/<id>/default` | Set this address as the default (unsets the previous one) | buyer, admin |
 
 ### Categories
 

@@ -6,7 +6,8 @@ Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()
 from app import create_app
 from app.extensions import db
 from app.models import (
-    User, Product, Category, Order, OrderItem, ProductImage, Cart, CartItem
+    User, Product, Category, Order, OrderItem, ProductImage, Cart, CartItem,
+    UserProfile, UserAddress
 )
 from app.slug import slugify
 import bcrypt
@@ -26,6 +27,8 @@ def clear_tables():
         db.session.query(Order).delete()
         db.session.query(ProductImage).delete()
         db.session.query(Product).delete()
+        db.session.query(UserAddress).delete()
+        db.session.query(UserProfile).delete()
         db.session.query(User).delete()
         db.session.query(Category).delete()
         db.session.commit()
@@ -69,25 +72,25 @@ def seed_users():
         {
             'username': 'jane_smith',
             'email': 'jane@example.com',
-            'password': 'password456',
+            'password': 'password123',
             'role': 'buyer'
         },
         {
             'username': 'bob_wilson',
             'email': 'bob@example.com',
-            'password': 'password789',
+            'password': 'password123',
             'role': 'buyer'
         },
         {
             'username': 'alice_brown',
             'email': 'alice@example.com',
-            'password': 'passwordabc',
+            'password': 'password123',
             'role': 'seller'
         },
         {
             'username': 'charlie_davis',
             'email': 'charlie@example.com',
-            'password': 'passworddef',
+            'password': 'password123',
             'role': 'seller'
         },
     ]
@@ -406,6 +409,86 @@ def seed_carts():
         raise
 
 
+def seed_user_profiles():
+    profiles_data = {
+        'john_doe': {'full_name': 'John Doe', 'phone': '+62811000001'},
+        'jane_smith': {'full_name': 'Jane Smith', 'phone': '+62811000002'},
+        'bob_wilson': {'full_name': 'Bob Wilson', 'phone': '+62811000003'},
+        'alice_brown': {'full_name': 'Alice Brown', 'phone': '+62811000004'},
+        'charlie_davis': {'full_name': 'Charlie Davis', 'phone': '+62811000005'},
+    }
+
+    try:
+        profiles = []
+        for username, data in profiles_data.items():
+            user = User.query.filter_by(username=username).first()
+            if not user:
+                continue
+            profiles.append(UserProfile(
+                user_id=user.id,
+                full_name=data['full_name'],
+                phone=data['phone'],
+            ))
+        db.session.add_all(profiles)
+        db.session.commit()
+        print(f"Created {len(profiles)} user profiles")
+        return profiles
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error seeding user profiles: {e}")
+        raise
+
+
+def seed_user_addresses():
+    addresses_data = {
+        'jane_smith': [
+            {
+                'label': 'Home', 'recipient_name': 'Jane Smith',
+                'phone': '+62811000002', 'address_line': 'Jl. Melati No. 1',
+                'city': 'Jakarta', 'postal_code': '10110', 'is_default': True,
+            },
+            {
+                'label': 'Office', 'recipient_name': 'Jane Smith',
+                'phone': '+62811000002', 'address_line': 'Jl. Sudirman No. 99',
+                'city': 'Jakarta', 'postal_code': '10220', 'is_default': False,
+            },
+        ],
+        'bob_wilson': [
+            {
+                'label': 'Home', 'recipient_name': 'Bob Wilson',
+                'phone': '+62811000003', 'address_line': 'Jl. Kenanga No. 5',
+                'city': 'Bandung', 'postal_code': '40111', 'is_default': True,
+            },
+        ],
+    }
+
+    try:
+        addresses = []
+        for username, entries in addresses_data.items():
+            user = User.query.filter_by(username=username).first()
+            if not user:
+                continue
+            for entry in entries:
+                addresses.append(UserAddress(
+                    user_id=user.id,
+                    label=entry['label'],
+                    recipient_name=entry['recipient_name'],
+                    phone=entry['phone'],
+                    address_line=entry['address_line'],
+                    city=entry['city'],
+                    postal_code=entry['postal_code'],
+                    is_default=entry['is_default'],
+                ))
+        db.session.add_all(addresses)
+        db.session.commit()
+        print(f"Created {len(addresses)} user addresses")
+        return addresses
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error seeding user addresses: {e}")
+        raise
+
+
 def seed_test_data():
     """Run all seeders"""
     with app.app_context():
@@ -417,6 +500,8 @@ def seed_test_data():
             clear_tables()
             seed_categories()
             seed_users()
+            seed_user_profiles()
+            seed_user_addresses()
             seed_products()
             seed_product_images()
             seed_orders()
@@ -435,6 +520,8 @@ def seed_test_data():
             print(f"  Order Items: {OrderItem.query.count()}")
             print(f"  Carts: {Cart.query.count()}")
             print(f"  Cart Items: {CartItem.query.count()}")
+            print(f"  User Profiles: {UserProfile.query.count()}")
+            print(f"  User Addresses: {UserAddress.query.count()}")
 
         except Exception as e:
             print(f"\nSeeding failed: {e}")

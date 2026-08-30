@@ -24,6 +24,21 @@ class User(db.Model):
 
     orders = db.relationship('Order', backref='buyer', lazy=True, foreign_keys='Order.user_id')
 
+    profile = db.relationship(
+        'UserProfile',
+        backref='user',
+        uselist=False,
+        lazy=True,
+        cascade='all, delete-orphan',
+    )
+    addresses = db.relationship(
+        'UserAddress',
+        backref='user',
+        lazy=True,
+        cascade='all, delete-orphan',
+        order_by='UserAddress.id.asc()',
+    )
+
     def to_dict_public(self):
         return {
             'username': self.username,
