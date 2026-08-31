@@ -43,6 +43,7 @@ def create_app(config_name=None):
     from app.routes.carts import cart_blp
     from app.routes.user_profiles import profile_blp
     from app.routes.user_addresses import addresses_blp
+    from app.routes.health import health_blp
     api.register_blueprint(products_blp)
     api.register_blueprint(product_images_blp)
     api.register_blueprint(users_blp)
@@ -52,6 +53,7 @@ def create_app(config_name=None):
     api.register_blueprint(cart_blp)
     api.register_blueprint(profile_blp)
     api.register_blueprint(addresses_blp)
+    api.register_blueprint(health_blp)
 
     # Error handlers
     register_error_handlers(flask_app)

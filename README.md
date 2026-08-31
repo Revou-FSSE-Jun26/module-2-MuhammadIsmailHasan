@@ -518,6 +518,12 @@ carries the category of the error.
 All endpoints are prefixed with `/api/v1`. Protected endpoints require a
 `Authorization: Bearer <access_token>` header.
 
+### Health
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| GET | `/api/v1/health` | Liveness + readiness check; verifies DB connectivity (`200` healthy, `503` if the database is down) | public |
+
 ### Auth
 
 | Method | Endpoint | Description |
