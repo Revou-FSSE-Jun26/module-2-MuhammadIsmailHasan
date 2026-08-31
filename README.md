@@ -49,6 +49,7 @@ Notes:
 | Code quality / linting | Pylint |
 | Dependency audit | pip-audit |
 | Logging | Python logging (daily rotating file) |
+| Containerization | Docker, Docker Compose (dev + prod) |
 | API documentation | Postman, Swagger UI (flask-smorest) |
 
 ## Features
@@ -352,6 +353,12 @@ module-2/
 ├── locust/
 │   └── locustfile.py          # performance / load test (customer journey)
 ├── images/                    # diagrams and test-result evidence
+├── docker/
+│   └── entrypoint.sh          # waits for DB, runs migrations, starts server
+├── Dockerfile                 # app image (slim base, non-root, gunicorn default)
+├── docker-compose.yml         # development stack (Flask dev server, live reload)
+├── docker-compose.prod.yml    # production stack (gunicorn)
+├── .dockerignore
 ├── run.py                     # application entry point
 ├── pytest.ini                 # pytest configuration
 └── requirements.txt           # Python dependencies
@@ -425,6 +432,73 @@ python3 run.py
 
 # Or with production config
 FLASK_ENV=production python3 run.py
+```
+
+## Running with Docker
+
+The project ships with a Docker setup for both development and production. A
+single `Dockerfile` builds the app image; two Compose files select the mode.
+Both bring up two services on a private bridge network (`revoshop-net`):
+
+| Service | Image | Purpose |
+|---------|-------|---------|
+| `db` | `postgres:16-alpine` | PostgreSQL, data persisted in the named volume `pgdata` |
+| `web` | built from `Dockerfile` | The Flask API |
+
+On startup the `web` container waits for the database to be healthy, runs
+`flask db upgrade` automatically (via `docker/entrypoint.sh`), then launches the
+server. Migrations are applied for you; **seeding is never automatic** — run it
+manually when you want sample data.
+
+### 1. Configure environment
+
+```bash
+cp .env.docker.example .env
+```
+
+Inside the Compose network the database host is the service name `db` (not
+`localhost`); Compose builds `DATABASE_URL` from the `POSTGRES_*` values, so you
+usually only edit those and `JWT_SECRET_KEY`.
+
+### Development
+
+Runs the Flask dev server with live reload (your source is bind-mounted into the
+container) and debug enabled.
+
+```bash
+docker compose up --build            # start (build on first run)
+docker compose logs -f web           # follow app logs
+docker compose down                  # stop (keeps the pgdata volume)
+```
+
+The API is published on `http://localhost:5000` (override with `WEB_PORT`, e.g.
+`WEB_PORT=8080 docker compose up` if port 5000 is taken).
+
+### Production
+
+Runs under gunicorn, with no source mount and `FLASK_ENV=production`. Required
+secrets (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_SECRET_KEY`)
+must be set in `.env` — the prod file fails fast if any is missing.
+
+```bash
+docker compose -f docker-compose.prod.yml up --build -d
+```
+
+The API is published on `http://localhost:8000` by default (override with
+`WEB_PORT`). The database port is **not** published to the host in production.
+
+### Common tasks
+
+```bash
+# Seed sample data (run once the stack is up)
+docker compose exec web python -m seeders.seeders
+
+# Open a shell / run one-off commands in the app container
+docker compose exec web sh
+docker compose exec web flask db upgrade
+
+# Reset the database completely (drops the named volume)
+docker compose down -v
 ```
 
 ### API Documentation (Postman)

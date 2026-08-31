@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Tests, coverage, caches
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Logs
+logs/
+*.log
+
+# Git / IDE / OS
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+
+# Docker files themselves (not needed inside the image)
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Project tooling not needed at runtime
+jira/
+locust/
+images/
+requirements-dev.txt
+.pylintrc
+README.md
