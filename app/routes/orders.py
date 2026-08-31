@@ -22,6 +22,7 @@ from app.services.order_service import (
     ShippingAddressRequiredError,
     AddressNotFoundError,
     AddressChangeNotAllowedError,
+    TrackingIdRequiredError,
 )
 from app.auth import roles_required
 
@@ -134,6 +135,8 @@ class OrderDetail(MethodView):
             abort(404, message=str(e))
         except OrderPermissionError as e:
             abort(403, message=str(e))
+        except TrackingIdRequiredError as e:
+            abort(422, message=str(e))
         except InvalidStatusTransitionError as e:
             abort(400, message=str(e))
 

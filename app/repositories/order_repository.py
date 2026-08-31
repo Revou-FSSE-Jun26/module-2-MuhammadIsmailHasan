@@ -97,9 +97,11 @@ class OrderRepository:
         return order
 
     @staticmethod
-    def update_status(order, new_status, updated_by=None):
+    def update_status(order, new_status, updated_by=None, tracking_id=None):
         order.status = new_status
         order.updated_by = updated_by
+        if tracking_id is not None:
+            order.tracking_id = tracking_id
         db.session.commit()
         return order
 

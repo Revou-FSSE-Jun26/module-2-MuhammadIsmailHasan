@@ -151,6 +151,14 @@ The main rules the system enforces:
   `cancelled` or `delivered` it is terminal — any further status change returns
   `400` with "order is ... and can no longer be modified".
 
+- **Shipping requires a tracking ID.** The `processing → shipped` move must
+  carry a `tracking_id` (the courier waybill / resi number) in the request
+  body; shipping without one returns `422`. It is captured only on that
+  transition — a `tracking_id` sent with any other status change is ignored —
+  and it is frozen once set, so advancing to `delivered` keeps it. Whoever
+  performs the shipped move (seller or admin) provides it. The value is exposed
+  on order responses as `tracking_id`.
+
 - **Cancelling (`DELETE /orders/<id>`):** the single cancel path for everyone.
   A buyer can cancel their own order; a seller can cancel an order containing
   one of their products; an admin can cancel any order. Cancellation is
@@ -340,7 +348,7 @@ module-2/
 | `categories` | Product categories |
 | `products` | Product information |
 | `product_images` | Product images (one-to-many, ordered) |
-| `orders` | Customer orders (includes a `shipping_*` address snapshot copied at checkout) |
+| `orders` | Customer orders (includes a `shipping_*` address snapshot copied at checkout and a `tracking_id` set when shipped) |
 | `order_items` | Line items within each order |
 | `carts` | One active shopping cart per buyer |
 | `cart_items` | Products a buyer intends to order (product + quantity) |
@@ -577,7 +585,7 @@ A buyer's shipping address book. Exactly one address is the default at any time
 | GET | `/api/v1/orders/` | List orders (buyer: own; seller: containing their products; admin: all) | any role |
 | POST | `/api/v1/orders/` | Create an order (optional `address_id`, else default; checks stock, deducts inventory) | buyer |
 | GET | `/api/v1/orders/<id>` | Get an order (buyer owner, seller of a product in it, or admin) | any role |
-| PUT | `/api/v1/orders/<id>` | Advance order status one step (seller scoped to own products; cannot cancel here) | seller, admin |
+| PUT | `/api/v1/orders/<id>` | Advance order status one step (`processing → shipped` requires a `tracking_id`; seller scoped to own products; cannot cancel here) | seller, admin |
 | PUT | `/api/v1/orders/<id>/address` | Re-set the shipping address (owner only; only while `waiting_for_payment`, else `409`) | buyer |
 | DELETE | `/api/v1/orders/<id>` | Cancel an order: restores stock, soft-deletes, records `updated_by` | buyer, seller, admin |
 

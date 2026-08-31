@@ -307,6 +307,66 @@ class TestUpdateOrderStatus:
         assert response.status_code == 404
 
 
+class TestShipTracking:
+
+    def _processing_order(self, seed_order, db):
+        seed_order.status = 'processing'
+        db.session.commit()
+        return seed_order
+
+    def test_ship_requires_tracking_id(self, client, db, seed_users, seed_order):
+        self._processing_order(seed_order, db)
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'shipped'
+        }, headers=auth_header(token))
+
+        assert response.status_code == 422
+        assert 'tracking_id is required' in response.get_json()['message']
+
+    def test_ship_with_tracking_id_succeeds(self, client, db, seed_users, seed_order):
+        self._processing_order(seed_order, db)
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'shipped', 'tracking_id': 'JNE-0001234567'
+        }, headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['status'] == 'shipped'
+        assert data['data']['tracking_id'] == 'JNE-0001234567'
+
+    def test_tracking_id_ignored_on_processing(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'processing', 'tracking_id': 'SHOULD-NOT-STICK'
+        }, headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['tracking_id'] is None
+
+    def test_tracking_id_frozen_after_shipped(self, client, db, seed_users, seed_order):
+        self._processing_order(seed_order, db)
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'shipped', 'tracking_id': 'JNE-0001234567'
+        }, headers=auth_header(token))
+
+        # advancing to delivered does not clear the tracking id
+        client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'delivered'
+        }, headers=auth_header(token))
+
+        fetched = client.get(f'/api/v1/orders/{seed_order.id}',
+                             headers=auth_header(token)).get_json()['data']
+        assert fetched['tracking_id'] == 'JNE-0001234567'
+
+
 class TestDeleteOrder:
 
     def test_delete_waiting_for_payment(self, client, seed_users, seed_order, seed_products):

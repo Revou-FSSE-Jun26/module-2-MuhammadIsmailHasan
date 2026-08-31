@@ -299,6 +299,7 @@ def seed_orders():
         {
             'user': buyer,
             'status': 'shipped',
+            'tracking_id': 'JNE-0001234567',
             'items': [
                 {'product': products[3], 'quantity': 1},
             ]
@@ -306,6 +307,7 @@ def seed_orders():
         {
             'user': buyer2,
             'status': 'delivered',
+            'tracking_id': 'SICEPAT-0007654321',
             'items': [
                 {'product': products[0], 'quantity': 2},
                 {'product': products[4], 'quantity': 1},
@@ -354,6 +356,7 @@ def seed_orders():
                 shipping_address_line=default_address.address_line if default_address else None,
                 shipping_city=default_address.city if default_address else None,
                 shipping_postal_code=default_address.postal_code if default_address else None,
+                tracking_id=order_data.get('tracking_id'),
             )
             db.session.add(order)
             db.session.flush()

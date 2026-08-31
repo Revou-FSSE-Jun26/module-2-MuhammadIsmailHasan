@@ -15,6 +15,7 @@ from app.services.order_service import (
     ShippingAddressRequiredError,
     AddressNotFoundError,
     AddressChangeNotAllowedError,
+    TrackingIdRequiredError,
 )
 
 
@@ -188,7 +189,7 @@ class TestUpdateStatus:
         OrderService.update_status(1, {'status': 'processing'}, user_id=7, role='seller')
 
         repo.order_has_seller_product.assert_called_once_with(order.id, 7)
-        repo.update_status.assert_called_once_with(order, 'processing', updated_by=7)
+        repo.update_status.assert_called_once_with(order, 'processing', updated_by=7, tracking_id=None)
 
     def test_seller_advances_shipped_to_delivered(self, repo):
         order = make_order(status='shipped', user_id=99)
@@ -197,7 +198,7 @@ class TestUpdateStatus:
         repo.update_status.return_value = order
 
         OrderService.update_status(1, {'status': 'delivered'}, user_id=7, role='seller')
-        repo.update_status.assert_called_once_with(order, 'delivered', updated_by=7)
+        repo.update_status.assert_called_once_with(order, 'delivered', updated_by=7, tracking_id=None)
 
     def test_seller_cannot_set_cancelled_via_update(self, repo):
         order = make_order(status='processing', user_id=99)
@@ -223,7 +224,7 @@ class TestUpdateStatus:
         repo.update_status.return_value = order
 
         OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
-        repo.update_status.assert_called_once_with(order, 'processing', updated_by=1)
+        repo.update_status.assert_called_once_with(order, 'processing', updated_by=1, tracking_id=None)
 
     def test_not_found(self, repo):
         repo.get_by_id.return_value = None
@@ -245,6 +246,63 @@ class TestUpdateStatus:
         repo.get_by_id.return_value = make_order(status='delivered', user_id=1)
         with pytest.raises(InvalidStatusTransitionError):
             OrderService.update_status(1, {'status': 'processing'}, user_id=1, role='admin')
+
+    def test_shipping_requires_tracking_id(self, repo):
+        order = make_order(status='processing', user_id=99)
+        repo.get_by_id.return_value = order
+        repo.order_has_seller_product.return_value = True
+
+        with pytest.raises(TrackingIdRequiredError):
+            OrderService.update_status(1, {'status': 'shipped'}, user_id=7, role='seller')
+        repo.update_status.assert_not_called()
+
+    def test_shipping_with_tracking_id_persists_it(self, repo):
+        order = make_order(status='processing', user_id=99)
+        repo.get_by_id.return_value = order
+        repo.order_has_seller_product.return_value = True
+        repo.update_status.return_value = order
+
+        OrderService.update_status(
+            1, {'status': 'shipped', 'tracking_id': 'JNE-123'}, user_id=7, role='seller'
+        )
+        repo.update_status.assert_called_once_with(
+            order, 'shipped', updated_by=7, tracking_id='JNE-123'
+        )
+
+    def test_shipping_with_empty_tracking_id_rejected(self, repo):
+        order = make_order(status='processing', user_id=99)
+        repo.get_by_id.return_value = order
+        repo.order_has_seller_product.return_value = True
+
+        with pytest.raises(TrackingIdRequiredError):
+            OrderService.update_status(
+                1, {'status': 'shipped', 'tracking_id': ''}, user_id=7, role='seller'
+            )
+        repo.update_status.assert_not_called()
+
+    def test_admin_can_ship_with_tracking_id(self, repo):
+        order = make_order(status='processing', user_id=99)
+        repo.get_by_id.return_value = order
+        repo.update_status.return_value = order
+
+        OrderService.update_status(
+            1, {'status': 'shipped', 'tracking_id': 'SICEPAT-9'}, user_id=1, role='admin'
+        )
+        repo.update_status.assert_called_once_with(
+            order, 'shipped', updated_by=1, tracking_id='SICEPAT-9'
+        )
+
+    def test_tracking_id_ignored_on_non_shipped_transition(self, repo):
+        order = make_order(status='waiting_for_payment', user_id=99)
+        repo.get_by_id.return_value = order
+        repo.update_status.return_value = order
+
+        OrderService.update_status(
+            1, {'status': 'processing', 'tracking_id': 'IGNORED'}, user_id=1, role='admin'
+        )
+        repo.update_status.assert_called_once_with(
+            order, 'processing', updated_by=1, tracking_id=None
+        )
 
 
 class TestCancel:

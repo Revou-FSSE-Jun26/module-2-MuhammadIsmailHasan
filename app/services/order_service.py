@@ -44,6 +44,10 @@ class OrderCannotBeDeletedError(Exception):
     pass
 
 
+class TrackingIdRequiredError(Exception):
+    pass
+
+
 class OrderService:
 
     @staticmethod
@@ -201,7 +205,17 @@ class OrderService:
                 f"cannot change status from '{order.status}' to '{new_status}'"
             )
 
-        return OrderRepository.update_status(order, new_status, updated_by=user_id)
+        tracking_id = None
+        if new_status == 'shipped':
+            tracking_id = data.get('tracking_id')
+            if not tracking_id:
+                raise TrackingIdRequiredError(
+                    "tracking_id is required to mark an order as shipped"
+                )
+
+        return OrderRepository.update_status(
+            order, new_status, updated_by=user_id, tracking_id=tracking_id
+        )
 
     @staticmethod
     def cancel(order_id, user_id=None, role=None):

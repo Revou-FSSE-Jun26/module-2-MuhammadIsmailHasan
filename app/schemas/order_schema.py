@@ -49,6 +49,11 @@ class UpdateOrderStatusSchema(Schema):
         ),
         error_messages={"required": "status is required"},
     )
+    tracking_id = fields.String(
+        load_default=None,
+        validate=validate.Length(min=1, max=100),
+        error_messages={"invalid": "tracking_id must be a string"},
+    )
 
 
 class OrderQuerySchema(Schema):
@@ -108,6 +113,7 @@ class OrderResponseSchema(Schema):
     shipping_address_line = fields.String(allow_none=True)
     shipping_city = fields.String(allow_none=True)
     shipping_postal_code = fields.String(allow_none=True)
+    tracking_id = fields.String(allow_none=True)
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')
 
@@ -130,6 +136,7 @@ class OrderDetailResponseSchema(Schema):
     shipping_address_line = fields.String(allow_none=True)
     shipping_city = fields.String(allow_none=True)
     shipping_postal_code = fields.String(allow_none=True)
+    tracking_id = fields.String(allow_none=True)
     is_active = fields.Boolean()
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')

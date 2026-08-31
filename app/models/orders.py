@@ -28,6 +28,8 @@ class Order(db.Model):
     shipping_city = db.Column(db.String(100))
     shipping_postal_code = db.Column(db.String(20))
 
+    tracking_id = db.Column(db.String(100))
+
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
@@ -46,6 +48,7 @@ class Order(db.Model):
             'shipping_address_line': self.shipping_address_line,
             'shipping_city': self.shipping_city,
             'shipping_postal_code': self.shipping_postal_code,
+            'tracking_id': self.tracking_id,
         }
 
     def to_dict_detail(self):
