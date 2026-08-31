@@ -6,6 +6,7 @@ from flask_jwt_extended import get_jwt_identity, get_jwt
 from app.schemas.product_image_schema import (
     CreateProductImageSchema,
     UpdateProductImageSchema,
+    ReorderImagesSchema,
     ProductImageResponseSchema,
 )
 from app.services.product_image_service import (
@@ -13,6 +14,7 @@ from app.services.product_image_service import (
     ProductNotFoundError,
     ProductImageNotFoundError,
     ProductImagePermissionError,
+    ReorderValidationError,
 )
 from app.auth import roles_required
 
@@ -108,4 +110,32 @@ class ProductImageDetail(MethodView):
         return jsonify({
             'message': 'success delete product image',
             'status': True,
+        }), 200
+
+
+@product_images_blp.route('/reorder')
+class ProductImageReorder(MethodView):
+
+    @product_images_blp.arguments(ReorderImagesSchema)
+    @roles_required('seller', 'admin')
+    def put(self, validated_data, product_id):
+        current_user_id = int(get_jwt_identity())
+        role = get_jwt().get('role')
+
+        try:
+            images = ProductImageService.reorder(
+                product_id, validated_data['image_ids'],
+                user_id=current_user_id, role=role,
+            )
+        except ProductNotFoundError as e:
+            abort(404, message=str(e))
+        except ProductImagePermissionError as e:
+            abort(403, message=str(e))
+        except ReorderValidationError as e:
+            abort(422, message=str(e))
+
+        return jsonify({
+            'message': 'product images reordered',
+            'status': True,
+            'data': ProductImageResponseSchema(many=True).dump(images),
         }), 200

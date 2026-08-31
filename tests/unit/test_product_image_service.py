@@ -8,6 +8,7 @@ from app.services.product_image_service import (
     ProductNotFoundError,
     ProductImageNotFoundError,
     ProductImagePermissionError,
+    ReorderValidationError,
 )
 
 
@@ -46,23 +47,43 @@ class TestCreate:
 
     def test_admin_can_create(self, repo):
         repo.get_product.return_value = make_product(seller_id=10)
+        repo.get_max_order.return_value = None
         repo.create.return_value = make_image()
 
         ProductImageService.create(
-            1, {'url': 'http://img/1.jpg', 'order': 0}, user_id=999, role='admin'
+            1, {'url': 'http://img/1.jpg'}, user_id=999, role='admin'
         )
 
         repo.create.assert_called_once_with(product_id=1, url='http://img/1.jpg', order=0)
 
-    def test_seller_owner_can_create(self, repo):
+    def test_first_image_gets_order_zero(self, repo):
         repo.get_product.return_value = make_product(seller_id=10)
+        repo.get_max_order.return_value = None
+        repo.create.return_value = make_image()
+
+        ProductImageService.create(1, {'url': 'http://img/1.jpg'}, user_id=10, role='seller')
+
+        assert repo.create.call_args.kwargs['order'] == 0
+
+    def test_next_image_appends_after_max(self, repo):
+        repo.get_product.return_value = make_product(seller_id=10)
+        repo.get_max_order.return_value = 4
+        repo.create.return_value = make_image()
+
+        ProductImageService.create(1, {'url': 'http://img/1.jpg'}, user_id=10, role='seller')
+
+        assert repo.create.call_args.kwargs['order'] == 5
+
+    def test_client_supplied_order_is_ignored(self, repo):
+        repo.get_product.return_value = make_product(seller_id=10)
+        repo.get_max_order.return_value = 2
         repo.create.return_value = make_image()
 
         ProductImageService.create(
-            1, {'url': 'http://img/1.jpg', 'order': 2}, user_id=10, role='seller'
+            1, {'url': 'http://img/1.jpg', 'order': 99}, user_id=10, role='seller'
         )
 
-        repo.create.assert_called_once_with(product_id=1, url='http://img/1.jpg', order=2)
+        assert repo.create.call_args.kwargs['order'] == 3
 
     def test_seller_non_owner_forbidden(self, repo):
         repo.get_product.return_value = make_product(seller_id=10)
@@ -72,14 +93,6 @@ class TestCreate:
                 1, {'url': 'http://img/1.jpg'}, user_id=77, role='seller'
             )
         repo.create.assert_not_called()
-
-    def test_order_defaults_to_zero(self, repo):
-        repo.get_product.return_value = make_product(seller_id=10)
-        repo.create.return_value = make_image()
-
-        ProductImageService.create(1, {'url': 'http://img/1.jpg'}, user_id=10, role='seller')
-
-        assert repo.create.call_args.kwargs['order'] == 0
 
     def test_product_not_found(self, repo):
         repo.get_product.return_value = None
@@ -96,10 +109,10 @@ class TestUpdate:
         repo.update.return_value = image
 
         ProductImageService.update(
-            1, 5, {'order': 3}, user_id=999, role='admin'
+            1, 5, {'url': 'http://new.jpg'}, user_id=999, role='admin'
         )
 
-        repo.update.assert_called_once_with(image, {'order': 3})
+        repo.update.assert_called_once_with(image, {'url': 'http://new.jpg'})
 
     def test_seller_owner_can_update(self, repo):
         repo.get_product.return_value = make_product(seller_id=10)
@@ -115,7 +128,7 @@ class TestUpdate:
         repo.get_product.return_value = make_product(seller_id=10)
 
         with pytest.raises(ProductImagePermissionError):
-            ProductImageService.update(1, 5, {'order': 1}, user_id=77, role='seller')
+            ProductImageService.update(1, 5, {'url': 'http://x.jpg'}, user_id=77, role='seller')
         repo.update.assert_not_called()
 
     def test_image_not_found(self, repo):
@@ -123,7 +136,7 @@ class TestUpdate:
         repo.get_by_id_for_product.return_value = None
 
         with pytest.raises(ProductImageNotFoundError):
-            ProductImageService.update(1, 999, {'order': 1}, user_id=10, role='seller')
+            ProductImageService.update(1, 999, {'url': 'http://x.jpg'}, user_id=10, role='seller')
 
     def test_no_effective_changes_returns_without_update(self, repo):
         repo.get_product.return_value = make_product(seller_id=10)
@@ -131,7 +144,7 @@ class TestUpdate:
         repo.get_by_id_for_product.return_value = image
 
         result = ProductImageService.update(
-            1, 5, {'url': None, 'order': None}, user_id=10, role='seller'
+            1, 5, {'url': None}, user_id=10, role='seller'
         )
 
         assert result is image
@@ -140,7 +153,7 @@ class TestUpdate:
     def test_product_not_found(self, repo):
         repo.get_product.return_value = None
         with pytest.raises(ProductNotFoundError):
-            ProductImageService.update(999, 5, {'order': 1}, user_id=1, role='admin')
+            ProductImageService.update(999, 5, {'url': 'http://x.jpg'}, user_id=1, role='admin')
 
 
 class TestDelete:
@@ -181,3 +194,53 @@ class TestDelete:
         repo.get_product.return_value = None
         with pytest.raises(ProductNotFoundError):
             ProductImageService.delete(999, 5, user_id=1, role='admin')
+
+
+class TestReorder:
+
+    def test_reorder_success(self, repo):
+        repo.get_product.return_value = make_product(seller_id=10)
+        images = [make_image(id=1), make_image(id=2), make_image(id=3)]
+        repo.list_by_product.return_value = images
+        repo.reorder.side_effect = lambda ordered: ordered
+
+        ProductImageService.reorder(1, [3, 1, 2], user_id=10, role='seller')
+
+        reordered = repo.reorder.call_args.args[0]
+        assert [img.id for img in reordered] == [3, 1, 2]
+
+    def test_reorder_missing_id_rejected(self, repo):
+        repo.get_product.return_value = make_product(seller_id=10)
+        repo.list_by_product.return_value = [make_image(id=1), make_image(id=2), make_image(id=3)]
+
+        with pytest.raises(ReorderValidationError):
+            ProductImageService.reorder(1, [1, 2], user_id=10, role='seller')
+        repo.reorder.assert_not_called()
+
+    def test_reorder_extra_id_rejected(self, repo):
+        repo.get_product.return_value = make_product(seller_id=10)
+        repo.list_by_product.return_value = [make_image(id=1), make_image(id=2)]
+
+        with pytest.raises(ReorderValidationError):
+            ProductImageService.reorder(1, [1, 2, 99], user_id=10, role='seller')
+        repo.reorder.assert_not_called()
+
+    def test_reorder_duplicate_id_rejected(self, repo):
+        repo.get_product.return_value = make_product(seller_id=10)
+        repo.list_by_product.return_value = [make_image(id=1), make_image(id=2)]
+
+        with pytest.raises(ReorderValidationError):
+            ProductImageService.reorder(1, [1, 1], user_id=10, role='seller')
+        repo.reorder.assert_not_called()
+
+    def test_reorder_non_owner_forbidden(self, repo):
+        repo.get_product.return_value = make_product(seller_id=10)
+
+        with pytest.raises(ProductImagePermissionError):
+            ProductImageService.reorder(1, [1, 2], user_id=77, role='seller')
+        repo.reorder.assert_not_called()
+
+    def test_reorder_product_not_found(self, repo):
+        repo.get_product.return_value = None
+        with pytest.raises(ProductNotFoundError):
+            ProductImageService.reorder(999, [1, 2], user_id=1, role='admin')

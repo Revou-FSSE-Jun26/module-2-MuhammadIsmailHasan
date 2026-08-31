@@ -29,11 +29,26 @@ class ProductImageRepository:
         ).first()
 
     @staticmethod
+    def get_max_order(product_id):
+        return (
+            db.session.query(db.func.max(ProductImage.order))
+            .filter_by(product_id=product_id, is_active=True)
+            .scalar()
+        )
+
+    @staticmethod
     def create(product_id, url, order):
         image = ProductImage(product_id=product_id, url=url, order=order)
         db.session.add(image)
         db.session.commit()
         return image
+
+    @staticmethod
+    def reorder(images_in_order):
+        for position, image in enumerate(images_in_order):
+            image.order = position
+        db.session.commit()
+        return images_in_order
 
     @staticmethod
     def update(image, data):

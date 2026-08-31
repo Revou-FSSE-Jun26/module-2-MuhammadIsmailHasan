@@ -1,4 +1,4 @@
-from marshmallow import Schema, fields, validate, validates, ValidationError, pre_load
+from marshmallow import Schema, fields, validate, pre_load
 
 
 class CreateProductImageSchema(Schema):
@@ -7,10 +7,6 @@ class CreateProductImageSchema(Schema):
         validate=validate.Length(min=1, max=500, error="url cannot exceed 500 characters"),
         error_messages={"required": "url is required", "null": "url cannot be empty"},
     )
-    order = fields.Integer(
-        load_default=0,
-        error_messages={"invalid": "order must be a number"},
-    )
 
     @pre_load
     def strip_url(self, data, **kwargs):
@@ -19,13 +15,6 @@ class CreateProductImageSchema(Schema):
             if not data['url']:
                 data['url'] = None
         return data
-
-    @validates('order')
-    def validate_order(self, value, **kwargs):
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise ValidationError("order must be a number")
-        if value < 0:
-            raise ValidationError("order cannot be negative")
 
 
 class UpdateProductImageSchema(Schema):
@@ -33,10 +22,6 @@ class UpdateProductImageSchema(Schema):
         load_default=None,
         validate=validate.Length(min=1, max=500, error="url cannot exceed 500 characters"),
     )
-    order = fields.Integer(
-        load_default=None,
-        error_messages={"invalid": "order must be a number"},
-    )
 
     @pre_load
     def strip_url(self, data, **kwargs):
@@ -46,14 +31,17 @@ class UpdateProductImageSchema(Schema):
                 data['url'] = None
         return data
 
-    @validates('order')
-    def validate_order(self, value, **kwargs):
-        if value is None:
-            return
-        if not isinstance(value, int) or isinstance(value, bool):
-            raise ValidationError("order must be a number")
-        if value < 0:
-            raise ValidationError("order cannot be negative")
+
+class ReorderImagesSchema(Schema):
+    image_ids = fields.List(
+        fields.Integer(),
+        required=True,
+        validate=validate.Length(min=1, error="image_ids cannot be empty"),
+        error_messages={
+            "required": "image_ids is required",
+            "invalid": "image_ids must be a list of numbers",
+        },
+    )
 
 
 class ProductImageResponseSchema(Schema):

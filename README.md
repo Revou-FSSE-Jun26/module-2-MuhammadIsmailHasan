@@ -58,7 +58,7 @@ Notes:
 - User profile (one-to-one with the user; full name, phone, avatar)
 - Shipping address book (one-to-many; buyers keep multiple addresses with exactly one default)
 - Product management (CRUD, filtering, sorting, pagination)
-- Product images (one-to-many, ordered; admin or the owning seller manages them)
+- Product images (one-to-many; server-managed ordering with auto-append and a reorder endpoint; admin or the owning seller manages them)
 - Product categories (CRUD, plus a dedicated route listing categories with their products)
 - Order management (creation with stock deduction, status transitions, cancel/refund)
 - Shopping cart (grouped by seller, live-computed totals, checkout to order)
@@ -196,8 +196,19 @@ The main rules the system enforces:
   `order` is the primary image. Product list responses expose that single
   primary `image`; the product detail response includes the full `images`
   list. Deleting an image is a soft delete (`is_active = false`).
-- Only an **admin** or the **seller who owns the product** can add, update, or
-  delete a product's images. Everyone else gets `403`.
+- **`order` is server-managed, never sent by the client.** On create the new
+  image is auto-appended to the end (`max(order) + 1`, or `0` for the first),
+  so two images can never collide on the same position. `order` is not an
+  accepted input field on create or update — sending it returns `422`. Update
+  only changes the `url`.
+- **Reordering** is done through a dedicated endpoint
+  (`PUT /products/<id>/images/reorder`) that takes the full list of the
+  product's active image IDs in the desired sequence and rewrites their
+  positions to `0, 1, 2, …` in one atomic step. The list must contain exactly
+  the product's active image IDs — no missing, extra, or duplicate IDs —
+  otherwise it returns `422`.
+- Only an **admin** or the **seller who owns the product** can add, update,
+  delete, or reorder a product's images. Everyone else gets `403`.
 
 **Cart**
 
@@ -347,7 +358,7 @@ module-2/
 | `user_addresses` | Buyer shipping addresses (one-to-many, one default per user) |
 | `categories` | Product categories |
 | `products` | Product information |
-| `product_images` | Product images (one-to-many, ordered) |
+| `product_images` | Product images (one-to-many; `order` server-managed, auto-appended) |
 | `orders` | Customer orders (includes a `shipping_*` address snapshot copied at checkout and a `tracking_id` set when shipped) |
 | `order_items` | Line items within each order |
 | `carts` | One active shopping cart per buyer |
@@ -574,8 +585,9 @@ A buyer's shipping address book. Exactly one address is the default at any time
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/v1/products/<product_id>/images/` | List a product's active images (ordered by `order` asc) | any role |
-| POST | `/api/v1/products/<product_id>/images/` | Add an image | admin, owning seller |
-| PUT | `/api/v1/products/<product_id>/images/<id>` | Update an image (`url`, `order`) | admin, owning seller |
+| POST | `/api/v1/products/<product_id>/images/` | Add an image (auto-appended to the end; `order` not accepted) | admin, owning seller |
+| PUT | `/api/v1/products/<product_id>/images/<id>` | Update an image (`url` only) | admin, owning seller |
+| PUT | `/api/v1/products/<product_id>/images/reorder` | Reorder all active images (`image_ids` in desired order) | admin, owning seller |
 | DELETE | `/api/v1/products/<product_id>/images/<id>` | Soft-delete an image | admin, owning seller |
 
 ### Orders

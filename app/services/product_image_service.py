@@ -13,6 +13,10 @@ class ProductImagePermissionError(Exception):
     pass
 
 
+class ReorderValidationError(Exception):
+    pass
+
+
 class ProductImageService:
 
     @staticmethod
@@ -42,10 +46,13 @@ class ProductImageService:
         product = ProductImageService._get_product_or_404(product_id)
         ProductImageService._authorize(product, user_id, role)
 
+        max_order = ProductImageRepository.get_max_order(product_id)
+        next_order = 0 if max_order is None else max_order + 1
+
         return ProductImageRepository.create(
             product_id=product_id,
             url=data['url'],
-            order=data.get('order', 0),
+            order=next_order,
         )
 
     @staticmethod
@@ -73,3 +80,24 @@ class ProductImageService:
             raise ProductImageNotFoundError("product image not found")
 
         ProductImageRepository.soft_delete(image)
+
+    @staticmethod
+    def reorder(product_id, image_ids, user_id=None, role=None):
+        product = ProductImageService._get_product_or_404(product_id)
+        ProductImageService._authorize(product, user_id, role)
+
+        images = ProductImageRepository.list_by_product(product_id)
+        existing_ids = [img.id for img in images]
+
+        if len(image_ids) != len(set(image_ids)):
+            raise ReorderValidationError("image_ids cannot contain duplicates")
+
+        if set(image_ids) != set(existing_ids):
+            raise ReorderValidationError(
+                "image_ids must contain exactly the product's active image ids"
+            )
+
+        by_id = {img.id: img for img in images}
+        ordered = [by_id[iid] for iid in image_ids]
+
+        return ProductImageRepository.reorder(ordered)
