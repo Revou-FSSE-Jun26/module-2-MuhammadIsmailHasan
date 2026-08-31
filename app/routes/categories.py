@@ -28,7 +28,6 @@ categories_blp = Blueprint(
 class CategoryList(MethodView):
 
     @categories_blp.arguments(CategoryQuerySchema, location='query')
-    @roles_required('seller', 'buyer', 'admin')
     def get(self, query_params):
         filters = {
             'name': query_params.get('name'),
@@ -67,7 +66,6 @@ class CategoryList(MethodView):
 class CategoryListWithProducts(MethodView):
 
     @categories_blp.arguments(CategoryQuerySchema, location='query')
-    @roles_required('seller', 'buyer', 'admin')
     def get(self, query_params):
         filters = {
             'name': query_params.get('name'),
@@ -91,7 +89,6 @@ class CategoryListWithProducts(MethodView):
 @categories_blp.route('/<int:category_id>')
 class CategoryDetail(MethodView):
 
-    @roles_required('seller', 'buyer', 'admin')
     def get(self, category_id):
         try:
             category = CategoryService.get_by_id(category_id)

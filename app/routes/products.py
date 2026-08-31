@@ -30,7 +30,6 @@ products_blp = Blueprint(
 class ProductList(MethodView):
 
     @products_blp.arguments(ProductQuerySchema, location='query')
-    @roles_required('buyer', 'seller', 'admin')
     def get(self, query_params):
         filters = {
             'name': query_params.get('name'),
@@ -71,8 +70,6 @@ class ProductList(MethodView):
 
 @products_blp.route('/slug/<string:slug>')
 class ProductBySlug(MethodView):
-
-    @roles_required('seller', 'buyer', 'admin')
     def get(self, slug):
         try:
             product = ProductService.get_by_slug(slug)
@@ -88,7 +85,6 @@ class ProductBySlug(MethodView):
 @products_blp.route('/<int:product_id>')
 class ProductDetail(MethodView):
 
-    @roles_required('seller', 'buyer', 'admin')
     def get(self, product_id):
         try:
             product = ProductService.get_by_id(product_id)

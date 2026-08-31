@@ -29,7 +29,6 @@ product_images_blp = Blueprint(
 @product_images_blp.route('/')
 class ProductImageList(MethodView):
 
-    @roles_required('buyer', 'seller', 'admin')
     def get(self, product_id):
         try:
             images = ProductImageService.list_images(product_id)
