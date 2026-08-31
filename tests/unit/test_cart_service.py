@@ -269,7 +269,10 @@ class TestCheckout:
         order_service.create.assert_called_once()
         called_args = order_service.create.call_args
         assert called_args.args[0] == 1
-        assert called_args.args[1] == {'items': [{'product_id': product.id, 'quantity': 2}]}
+        assert called_args.args[1] == {
+            'items': [{'product_id': product.id, 'quantity': 2}],
+            'address_id': None,
+        }
         repo.delete_items_by_product_ids.assert_called_once_with(cart, [product.id])
 
     def test_checkout_removes_only_ordered_products(self, repo, order_service):
@@ -327,7 +330,10 @@ class TestCheckoutSelection:
         CartService.checkout(1, seller_id=10)
 
         payload = order_service.create.call_args.args[1]
-        assert payload == {'items': [{'product_id': p_alice.id, 'quantity': 2}]}
+        assert payload == {
+            'items': [{'product_id': p_alice.id, 'quantity': 2}],
+            'address_id': None,
+        }
         repo.delete_items_by_product_ids.assert_called_once_with(cart, [p_alice.id])
 
     def test_checkout_by_seller_no_match(self, repo, order_service):
@@ -343,7 +349,10 @@ class TestCheckoutSelection:
         CartService.checkout(1, cart_item_ids=[2])
 
         payload = order_service.create.call_args.args[1]
-        assert payload == {'items': [{'product_id': p_charlie.id, 'quantity': 3}]}
+        assert payload == {
+            'items': [{'product_id': p_charlie.id, 'quantity': 3}],
+            'address_id': None,
+        }
         repo.delete_items_by_product_ids.assert_called_once_with(cart, [p_charlie.id])
 
     def test_checkout_by_item_ids_unknown_id(self, repo, order_service):

@@ -1,3 +1,4 @@
+from app.models.user_addresses import UserAddress
 from tests.conftest import get_auth_token, auth_header
 
 
@@ -29,7 +30,10 @@ def _create(client, token, **overrides):
 
 class TestCreateAddress:
 
-    def test_first_address_is_default(self, client, seed_users):
+    def test_first_address_is_default(self, client, db, seed_users):
+        UserAddress.query.filter_by(user_id=seed_users['buyer'].id).delete()
+        db.session.commit()
+
         token = _buyer_token(client)
         response = _create(client, token)
         data = response.get_json()
@@ -60,7 +64,10 @@ class TestCreateAddress:
 
 class TestListAndGet:
 
-    def test_list_addresses(self, client, seed_users):
+    def test_list_addresses(self, client, db, seed_users):
+        UserAddress.query.filter_by(user_id=seed_users['buyer'].id).delete()
+        db.session.commit()
+
         token = _buyer_token(client)
         _create(client, token)
         _create(client, token, label='Office')
@@ -70,7 +77,6 @@ class TestListAndGet:
 
         assert response.status_code == 200
         assert len(data['data']) == 2
-        # default first due to ordering
         assert data['data'][0]['is_default'] is True
 
     def test_get_single_address(self, client, seed_users):
@@ -100,7 +106,6 @@ class TestSetDefault:
         assert response.status_code == 200
         assert response.get_json()['data']['is_default'] is True
 
-        # the first is no longer default
         listing = client.get('/api/v1/addresses',
                              headers=auth_header(token)).get_json()['data']
         by_id = {a['id']: a for a in listing}
@@ -131,7 +136,10 @@ class TestDeleteAddress:
                                  headers=auth_header(token))
         assert response.status_code == 200
 
-    def test_cannot_delete_default_with_others(self, client, seed_users):
+    def test_cannot_delete_default_with_others(self, client, db, seed_users):
+        UserAddress.query.filter_by(user_id=seed_users['buyer'].id).delete()
+        db.session.commit()
+
         token = _buyer_token(client)
         first = _create(client, token).get_json()['data']
         _create(client, token, label='Office')
@@ -140,7 +148,10 @@ class TestDeleteAddress:
                                  headers=auth_header(token))
         assert response.status_code == 409
 
-    def test_can_delete_last_default(self, client, seed_users):
+    def test_can_delete_last_default(self, client, db, seed_users):
+        UserAddress.query.filter_by(user_id=seed_users['buyer'].id).delete()
+        db.session.commit()
+
         token = _buyer_token(client)
         only = _create(client, token).get_json()['data']
 

@@ -21,6 +21,8 @@ from app.services.cart_service import (
 from app.services.order_service import (
     ProductNotFoundError as OrderProductNotFoundError,
     InsufficientStockError as OrderInsufficientStockError,
+    ShippingAddressRequiredError,
+    AddressNotFoundError,
 )
 from app.auth import roles_required
 
@@ -35,7 +37,7 @@ cart_blp = Blueprint(
 @cart_blp.route('')
 class CartResource(MethodView):
 
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer')
     def get(self):
         current_user_id = int(get_jwt_identity())
         cart = CartService.get_cart(current_user_id)
@@ -46,7 +48,7 @@ class CartResource(MethodView):
             'data': cart,
         }), 200
 
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer')
     def delete(self):
         current_user_id = int(get_jwt_identity())
         cart = CartService.clear_cart(current_user_id)
@@ -62,7 +64,7 @@ class CartResource(MethodView):
 class CartItemList(MethodView):
 
     @cart_blp.arguments(AddCartItemSchema)
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer')
     def post(self, validated_data):
         current_user_id = int(get_jwt_identity())
 
@@ -88,7 +90,7 @@ class CartItemList(MethodView):
 class CartItemResource(MethodView):
 
     @cart_blp.arguments(UpdateCartItemSchema)
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer')
     def put(self, validated_data, item_id):
         current_user_id = int(get_jwt_identity())
 
@@ -109,7 +111,7 @@ class CartItemResource(MethodView):
             'data': cart,
         }), 200
 
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer')
     def delete(self, item_id):
         current_user_id = int(get_jwt_identity())
 
@@ -129,7 +131,7 @@ class CartItemResource(MethodView):
 class CartCheckout(MethodView):
 
     @cart_blp.arguments(CheckoutSchema)
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer')
     def post(self, validated_data):
         current_user_id = int(get_jwt_identity())
 
@@ -138,11 +140,16 @@ class CartCheckout(MethodView):
                 current_user_id,
                 seller_id=validated_data.get('seller_id'),
                 cart_item_ids=validated_data.get('cart_item_ids'),
+                address_id=validated_data.get('address_id'),
             )
         except EmptyCartError as e:
             abort(400, message=str(e))
         except CartSelectionError as e:
             abort(404, message=str(e))
+        except AddressNotFoundError as e:
+            abort(404, message=str(e))
+        except ShippingAddressRequiredError as e:
+            abort(422, message=str(e))
         except ProductUnavailableError as e:
             abort(409, message=str(e))
         except (InsufficientStockError, OrderInsufficientStockError) as e:

@@ -22,6 +22,12 @@ class Order(db.Model):
     ordered_at = db.Column(db.DateTime, default=utcnow)
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_orders_updated_by'), nullable=True, index=True)
 
+    shipping_recipient_name = db.Column(db.String(150))
+    shipping_phone = db.Column(db.String(30))
+    shipping_address_line = db.Column(db.String(255))
+    shipping_city = db.Column(db.String(100))
+    shipping_postal_code = db.Column(db.String(20))
+
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
@@ -35,6 +41,11 @@ class Order(db.Model):
             'status': self.status,
             'ordered_at': self.ordered_at.isoformat() if self.ordered_at else None,
             'updated_by': self.updated_by,
+            'shipping_recipient_name': self.shipping_recipient_name,
+            'shipping_phone': self.shipping_phone,
+            'shipping_address_line': self.shipping_address_line,
+            'shipping_city': self.shipping_city,
+            'shipping_postal_code': self.shipping_postal_code,
         }
 
     def to_dict_detail(self):

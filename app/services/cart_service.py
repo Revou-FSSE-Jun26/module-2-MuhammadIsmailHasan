@@ -132,7 +132,7 @@ class CartService:
         return list(cart.items)
 
     @staticmethod
-    def checkout(user_id, seller_id=None, cart_item_ids=None):
+    def checkout(user_id, seller_id=None, cart_item_ids=None, address_id=None):
         cart = CartRepository.get_active_cart(user_id)
         if not cart or not cart.items:
             raise EmptyCartError("cart is empty")
@@ -158,7 +158,9 @@ class CartService:
             items_payload.append({'product_id': item.product_id, 'quantity': item.quantity})
             ordered_product_ids.append(item.product_id)
 
-        order = OrderService.create(user_id, {'items': items_payload})
+        order = OrderService.create(
+            user_id, {'items': items_payload, 'address_id': address_id}
+        )
 
         CartRepository.delete_items_by_product_ids(cart, ordered_product_ids)
 

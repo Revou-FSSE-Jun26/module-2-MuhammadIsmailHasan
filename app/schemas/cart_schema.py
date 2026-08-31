@@ -53,6 +53,10 @@ class CheckoutSchema(Schema):
         load_default=None,
         error_messages={"invalid": "cart_item_ids must be a list of numbers"},
     )
+    address_id = fields.Integer(
+        load_default=None,
+        error_messages={"invalid": "address_id must be a number"},
+    )
 
     @validates_schema
     def validate_selection(self, data, **kwargs):

@@ -24,6 +24,20 @@ class CreateOrderSchema(Schema):
         validate=validate.Length(min=1, error="items cannot be empty"),
         error_messages={"required": "items is required", "invalid": "items must be a list"},
     )
+    address_id = fields.Integer(
+        load_default=None,
+        error_messages={"invalid": "address_id must be a number"},
+    )
+
+
+class ChangeOrderAddressSchema(Schema):
+    address_id = fields.Integer(
+        required=True,
+        error_messages={
+            "required": "address_id is required",
+            "invalid": "address_id must be a number",
+        },
+    )
 
 
 class UpdateOrderStatusSchema(Schema):
@@ -89,6 +103,11 @@ class OrderResponseSchema(Schema):
     status = fields.String()
     ordered_at = fields.DateTime(format='iso')
     updated_by = fields.Integer(allow_none=True)
+    shipping_recipient_name = fields.String(allow_none=True)
+    shipping_phone = fields.String(allow_none=True)
+    shipping_address_line = fields.String(allow_none=True)
+    shipping_city = fields.String(allow_none=True)
+    shipping_postal_code = fields.String(allow_none=True)
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')
 
@@ -106,6 +125,11 @@ class OrderDetailResponseSchema(Schema):
     status = fields.String()
     ordered_at = fields.DateTime(format='iso')
     updated_by = fields.Integer(allow_none=True)
+    shipping_recipient_name = fields.String(allow_none=True)
+    shipping_phone = fields.String(allow_none=True)
+    shipping_address_line = fields.String(allow_none=True)
+    shipping_city = fields.String(allow_none=True)
+    shipping_postal_code = fields.String(allow_none=True)
     is_active = fields.Boolean()
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')

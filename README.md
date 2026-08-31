@@ -16,7 +16,7 @@ that account is allowed to do.
 |------|--------------|------------------|
 | **buyer** | A customer who shops on the platform | Browse products and categories, place orders, view their **own** orders, and cancel their own orders (via `DELETE`). Buyers **cannot** advance an order's status. |
 | **seller** | A merchant who supplies the catalog | Browse products and categories, create / update / delete products and categories, advance the fulfillment status of orders that contain **their own** products, and cancel those orders (via `DELETE`). Sellers do **not** place orders. |
-| **admin** | A platform operator | Full access: everything a buyer and seller can do, plus acting on **any** user's orders and deleting **any** user account. |
+| **admin** | A platform operator | Manage the catalog like a seller, act on **any** user's orders (advance status, cancel), and delete **any** user account. Admins do **not** place orders or use the cart — that is a buyer-only flow. |
 
 Notes:
 
@@ -121,6 +121,8 @@ The main rules the system enforces:
 
 **Orders**
 
+- Only **buyers** place orders. Sellers and admins do not create orders or use
+  the cart (they get `403`); admins still view and act on any order's status.
 - You can only order what's in stock; if any item runs short, the whole order is rejected.
 - Prices and totals are calculated by the server from the product, not sent by the client.
 - Placing an order reduces stock automatically.
@@ -159,6 +161,24 @@ The main rules the system enforces:
 
 - **Audit:** every status change and cancellation records the acting user in
   the order's `updated_by` field.
+
+- **Shipping address is a snapshot, not a reference.** At checkout the order
+  copies the address *values* onto itself (`shipping_recipient_name`,
+  `shipping_phone`, `shipping_address_line`, `shipping_city`,
+  `shipping_postal_code`) rather than storing a link to `user_addresses`. This
+  is the same copy-on-write approach `order_items` uses for `unit_price`: a past
+  order records where it actually shipped, so later editing or deleting the
+  address book never rewrites history. The address book stays purely a
+  convenience for autofilling the next order.
+- **Choosing the address.** Order creation and cart checkout accept an optional
+  `address_id`. If omitted, the buyer's **default** address is used; if given,
+  it must belong to the buyer (otherwise `404`). A buyer with no resolvable
+  address cannot place an order (`422`) — the requirement is enforced at
+  submission time, not before.
+- **Address is editable only before fulfillment.** `PUT /orders/<id>/address`
+  (buyer, owner-only) re-snapshots from a chosen address, but **only while the
+  order is `waiting_for_payment`**. Once it moves to `processing` or beyond the
+  warehouse is acting on it, so the address locks and any change returns `409`.
 
 **Product images**
 
@@ -300,6 +320,7 @@ module-2/
 │       ├── test_products.py
 │       ├── test_product_images.py
 │       ├── test_orders.py
+│       ├── test_order_address.py
 │       └── test_cart.py
 ├── locust/
 │   └── locustfile.py          # performance / load test (customer journey)
@@ -319,7 +340,7 @@ module-2/
 | `categories` | Product categories |
 | `products` | Product information |
 | `product_images` | Product images (one-to-many, ordered) |
-| `orders` | Customer orders |
+| `orders` | Customer orders (includes a `shipping_*` address snapshot copied at checkout) |
 | `order_items` | Line items within each order |
 | `carts` | One active shopping cart per buyer |
 | `cart_items` | Products a buyer intends to order (product + quantity) |
@@ -554,9 +575,10 @@ A buyer's shipping address book. Exactly one address is the default at any time
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/api/v1/orders/` | List orders (buyer: own; seller: containing their products; admin: all) | any role |
-| POST | `/api/v1/orders/` | Create an order (checks stock, deducts inventory) | buyer, admin |
+| POST | `/api/v1/orders/` | Create an order (optional `address_id`, else default; checks stock, deducts inventory) | buyer |
 | GET | `/api/v1/orders/<id>` | Get an order (buyer owner, seller of a product in it, or admin) | any role |
 | PUT | `/api/v1/orders/<id>` | Advance order status one step (seller scoped to own products; cannot cancel here) | seller, admin |
+| PUT | `/api/v1/orders/<id>/address` | Re-set the shipping address (owner only; only while `waiting_for_payment`, else `409`) | buyer |
 | DELETE | `/api/v1/orders/<id>` | Cancel an order: restores stock, soft-deletes, records `updated_by` | buyer, seller, admin |
 
 **Order status transitions:**
@@ -574,12 +596,12 @@ order ships.
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| GET | `/api/v1/cart` | Get the current buyer's cart, grouped by seller with live totals | buyer, admin |
-| POST | `/api/v1/cart/items` | Add a product (accumulates quantity if already present) | buyer, admin |
-| PUT | `/api/v1/cart/items/<id>` | Set an item's quantity (`0` removes it) | buyer, admin |
-| DELETE | `/api/v1/cart/items/<id>` | Remove a single item | buyer, admin |
-| DELETE | `/api/v1/cart` | Clear the whole cart | buyer, admin |
-| POST | `/api/v1/cart/checkout` | Convert the cart into an order and remove the ordered items. Optional body selects a subset (see below) | buyer, admin |
+| GET | `/api/v1/cart` | Get the current buyer's cart, grouped by seller with live totals | buyer |
+| POST | `/api/v1/cart/items` | Add a product (accumulates quantity if already present) | buyer |
+| PUT | `/api/v1/cart/items/<id>` | Set an item's quantity (`0` removes it) | buyer |
+| DELETE | `/api/v1/cart/items/<id>` | Remove a single item | buyer |
+| DELETE | `/api/v1/cart` | Clear the whole cart | buyer |
+| POST | `/api/v1/cart/checkout` | Convert the cart into an order and remove the ordered items. Optional body selects a subset and an `address_id` (see below) | buyer |
 
 **Checkout selection (optional JSON body):**
 
@@ -593,6 +615,10 @@ order ships.
 `422`). A `seller_id` with no matching items, or an unknown cart item id,
 returns `404`. Only the checked-out items are removed from the cart; the rest
 stay. Selection still produces a single order.
+
+An optional `address_id` can be combined with any of the above to ship to a
+specific saved address; if omitted, the buyer's default address is used. The
+resolved address is snapshotted onto the order.
 
 ## Testing
 

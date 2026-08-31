@@ -1,4 +1,5 @@
 from app.repositories.order_repository import OrderRepository
+from app.repositories.user_address_repository import UserAddressRepository
 from app.validation import (
     ALLOWED_TRANSITIONS,
     ROLE_ALLOWED_TARGET_STATUSES,
@@ -8,6 +9,18 @@ from app.validation import (
 
 
 class OrderNotFoundError(Exception):
+    pass
+
+
+class ShippingAddressRequiredError(Exception):
+    pass
+
+
+class AddressNotFoundError(Exception):
+    pass
+
+
+class AddressChangeNotAllowedError(Exception):
     pass
 
 
@@ -75,7 +88,32 @@ class OrderService:
         return order
 
     @staticmethod
+    def _resolve_shipping_address(user_id, address_id=None):
+        if address_id is not None:
+            address = UserAddressRepository.get(user_id, address_id)
+            if not address:
+                raise AddressNotFoundError("address not found")
+        else:
+            address = UserAddressRepository.get_default(user_id)
+            if not address:
+                raise ShippingAddressRequiredError(
+                    "a shipping address is required to place an order"
+                )
+
+        return {
+            'shipping_recipient_name': address.recipient_name,
+            'shipping_phone': address.phone,
+            'shipping_address_line': address.address_line,
+            'shipping_city': address.city,
+            'shipping_postal_code': address.postal_code,
+        }
+
+    @staticmethod
     def create(user_id, data):
+        shipping = OrderService._resolve_shipping_address(
+            user_id, data.get('address_id')
+        )
+
         items_input = data['items']
         items_data = []
 
@@ -104,7 +142,27 @@ class OrderService:
                 'sub_total': sub_total,
             })
 
-        return OrderRepository.create(user_id, items_data)
+        return OrderRepository.create(user_id, items_data, shipping)
+
+    @staticmethod
+    def change_address(order_id, address_id, user_id):
+        order = OrderRepository.get_by_id(order_id)
+        if not order or not order.is_active:
+            raise OrderNotFoundError("order not found")
+
+        if order.user_id != user_id:
+            raise OrderPermissionError(
+                "you don't have permission to change this order's address"
+            )
+
+        if order.status != 'waiting_for_payment':
+            raise AddressChangeNotAllowedError(
+                f"shipping address can no longer be changed for a "
+                f"'{order.status}' order"
+            )
+
+        shipping = OrderService._resolve_shipping_address(user_id, address_id)
+        return OrderRepository.update_shipping(order, shipping)
 
     @staticmethod
     def update_status(order_id, data, user_id=None, role=None):

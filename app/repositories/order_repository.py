@@ -64,12 +64,13 @@ class OrderRepository:
         return Order.query.filter_by(id=order_id, is_active=True).first()
 
     @staticmethod
-    def create(user_id, items_data):
+    def create(user_id, items_data, shipping=None):
         total_amount = sum(item['sub_total'] for item in items_data)
 
         order = Order(
             user_id=user_id,
             total_amount=total_amount,
+            **(shipping or {}),
         )
         db.session.add(order)
         db.session.flush()
@@ -85,6 +86,13 @@ class OrderRepository:
             db.session.add(order_item)
             item_data['product'].stock -= item_data['quantity']
 
+        db.session.commit()
+        return order
+
+    @staticmethod
+    def update_shipping(order, shipping):
+        for field, value in shipping.items():
+            setattr(order, field, value)
         db.session.commit()
         return order
 

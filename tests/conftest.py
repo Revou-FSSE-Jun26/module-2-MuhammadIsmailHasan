@@ -8,6 +8,7 @@ from app.extensions import db as _db
 from app.models.users import User
 from app.models.categories import Category
 from app.models.products import Product
+from app.models.user_addresses import UserAddress
 from app.auth import hash_password
 
 
@@ -71,6 +72,19 @@ def seed_users(db):
     )
 
     db.session.add_all([buyer, seller, seller2, admin])
+    db.session.commit()
+
+    buyer_address = UserAddress(
+        user_id=buyer.id,
+        label='Home',
+        recipient_name='Buyer Test',
+        phone='+628123456789',
+        address_line='Jl. Test No. 1',
+        city='Jakarta',
+        postal_code='10110',
+        is_default=True,
+    )
+    db.session.add(buyer_address)
     db.session.commit()
 
     return {'buyer': buyer, 'seller': seller, 'seller2': seller2, 'admin': admin}

@@ -1,11 +1,3 @@
-"""
-Unit tests for OrderService.
-
-These are pure unit tests: OrderRepository is mocked so the service's
-business logic (stock checks, price calculation, ownership, status
-transitions, refund rules) is exercised in isolation, with no database.
-"""
-
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
@@ -20,6 +12,9 @@ from app.services.order_service import (
     InsufficientStockError,
     InvalidStatusTransitionError,
     OrderCannotBeDeletedError,
+    ShippingAddressRequiredError,
+    AddressNotFoundError,
+    AddressChangeNotAllowedError,
 )
 
 
@@ -34,15 +29,31 @@ def make_order(id=1, user_id=1, status='waiting_for_payment', is_active=True, it
     )
 
 
+def make_address(recipient_name='Buyer', phone='123', address_line='Jl. A',
+                 city='Jakarta', postal_code='10110'):
+    return SimpleNamespace(
+        recipient_name=recipient_name, phone=phone,
+        address_line=address_line, city=city, postal_code=postal_code,
+    )
+
+
 @pytest.fixture
 def repo():
     with patch('app.services.order_service.OrderRepository') as mock_repo:
         yield mock_repo
 
 
+@pytest.fixture
+def address_repo():
+    with patch('app.services.order_service.UserAddressRepository') as mock_repo:
+        mock_repo.get_default.return_value = make_address()
+        mock_repo.get.return_value = make_address()
+        yield mock_repo
+
+
 class TestCreate:
 
-    def test_create_success_calculates_totals(self, repo):
+    def test_create_success_calculates_totals(self, repo, address_repo):
         product = make_product(id=5, price=Decimal('100.00'), stock=10)
         repo.get_product_by_id.return_value = product
         repo.create.return_value = make_order(id=99)
@@ -51,8 +62,7 @@ class TestCreate:
         result = OrderService.create(user_id=1, data=data)
 
         assert result.id == 99
-        # repo.create called with computed items
-        called_user_id, called_items = repo.create.call_args[0]
+        called_user_id, called_items = repo.create.call_args[0][:2]
         assert called_user_id == 1
         assert len(called_items) == 1
         item = called_items[0]
@@ -61,7 +71,7 @@ class TestCreate:
         assert item['unit_price'] == Decimal('100.00')
         assert item['sub_total'] == Decimal('300.00')
 
-    def test_create_multiple_items(self, repo):
+    def test_create_multiple_items(self, repo, address_repo):
         p1 = make_product(id=1, price=Decimal('10.00'), stock=100)
         p2 = make_product(id=2, price=Decimal('5.00'), stock=100)
         repo.get_product_by_id.side_effect = lambda pid: {1: p1, 2: p2}[pid]
@@ -73,11 +83,11 @@ class TestCreate:
         ]}
         OrderService.create(user_id=7, data=data)
 
-        _, called_items = repo.create.call_args[0]
+        called_items = repo.create.call_args[0][1]
         assert called_items[0]['sub_total'] == Decimal('20.00')
         assert called_items[1]['sub_total'] == Decimal('20.00')
 
-    def test_create_product_not_found(self, repo):
+    def test_create_product_not_found(self, repo, address_repo):
         repo.get_product_by_id.return_value = None
 
         with pytest.raises(ProductNotFoundError) as exc:
@@ -85,7 +95,7 @@ class TestCreate:
         assert 'product with id 999 not found' in str(exc.value)
         repo.create.assert_not_called()
 
-    def test_create_insufficient_stock(self, repo):
+    def test_create_insufficient_stock(self, repo, address_repo):
         repo.get_product_by_id.return_value = make_product(stock=2)
 
         with pytest.raises(InsufficientStockError) as exc:
@@ -93,11 +103,10 @@ class TestCreate:
         assert 'insufficient stock' in str(exc.value)
         repo.create.assert_not_called()
 
-    def test_create_stock_exactly_equal_is_allowed(self, repo):
+    def test_create_stock_exactly_equal_is_allowed(self, repo, address_repo):
         repo.get_product_by_id.return_value = make_product(stock=5)
         repo.create.return_value = make_order()
 
-        # requesting exactly the available stock should NOT raise
         OrderService.create(user_id=1, data={'items': [{'product_id': 1, 'quantity': 5}]})
         repo.create.assert_called_once()
 
@@ -301,3 +310,71 @@ class TestCancel:
 
         OrderService.cancel(1, user_id=1, role='admin')
         repo.cancel_order.assert_called_once_with(order, updated_by=1)
+
+
+class TestResolveShippingAddress:
+
+    def test_uses_default_when_no_address_id(self, address_repo):
+        address_repo.get_default.return_value = make_address(city='Jakarta')
+
+        shipping = OrderService._resolve_shipping_address(1)
+
+        address_repo.get_default.assert_called_once_with(1)
+        assert shipping['shipping_city'] == 'Jakarta'
+
+    def test_uses_given_address_id(self, address_repo):
+        address_repo.get.return_value = make_address(city='Bandung')
+
+        shipping = OrderService._resolve_shipping_address(1, address_id=5)
+
+        address_repo.get.assert_called_once_with(1, 5)
+        assert shipping['shipping_city'] == 'Bandung'
+
+    def test_no_default_raises_required(self, address_repo):
+        address_repo.get_default.return_value = None
+
+        with pytest.raises(ShippingAddressRequiredError):
+            OrderService._resolve_shipping_address(1)
+
+    def test_unknown_address_id_raises_not_found(self, address_repo):
+        address_repo.get.return_value = None
+
+        with pytest.raises(AddressNotFoundError):
+            OrderService._resolve_shipping_address(1, address_id=99)
+
+
+class TestChangeAddress:
+
+    def test_change_while_waiting(self, repo, address_repo):
+        order = make_order(id=3, user_id=1, status='waiting_for_payment')
+        repo.get_by_id.return_value = order
+        address_repo.get.return_value = make_address(city='Bandung')
+        repo.update_shipping.return_value = order
+
+        OrderService.change_address(3, address_id=5, user_id=1)
+
+        repo.update_shipping.assert_called_once()
+        shipping = repo.update_shipping.call_args[0][1]
+        assert shipping['shipping_city'] == 'Bandung'
+
+    def test_change_blocked_when_processing(self, repo, address_repo):
+        order = make_order(id=3, user_id=1, status='processing')
+        repo.get_by_id.return_value = order
+
+        with pytest.raises(AddressChangeNotAllowedError):
+            OrderService.change_address(3, address_id=5, user_id=1)
+        repo.update_shipping.assert_not_called()
+
+    def test_change_not_owner(self, repo, address_repo):
+        order = make_order(id=3, user_id=2, status='waiting_for_payment')
+        repo.get_by_id.return_value = order
+
+        with pytest.raises(OrderPermissionError):
+            OrderService.change_address(3, address_id=5, user_id=1)
+        repo.update_shipping.assert_not_called()
+
+    def test_change_order_not_found(self, repo, address_repo):
+        repo.get_by_id.return_value = None
+
+        with pytest.raises(OrderNotFoundError):
+            OrderService.change_address(3, address_id=5, user_id=1)

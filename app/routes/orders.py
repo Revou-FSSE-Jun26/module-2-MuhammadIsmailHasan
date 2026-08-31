@@ -6,6 +6,7 @@ from flask_jwt_extended import get_jwt_identity, get_jwt
 from app.schemas.order_schema import (
     CreateOrderSchema,
     UpdateOrderStatusSchema,
+    ChangeOrderAddressSchema,
     OrderQuerySchema,
     OrderResponseSchema,
     OrderDetailResponseSchema,
@@ -18,6 +19,9 @@ from app.services.order_service import (
     InsufficientStockError,
     InvalidStatusTransitionError,
     OrderCannotBeDeletedError,
+    ShippingAddressRequiredError,
+    AddressNotFoundError,
+    AddressChangeNotAllowedError,
 )
 from app.auth import roles_required
 
@@ -67,12 +71,16 @@ class OrderList(MethodView):
         }), 200
 
     @orders_blp.arguments(CreateOrderSchema)
-    @roles_required('buyer', 'admin')
+    @roles_required('buyer')
     def post(self, validated_data):
         current_user_id = int(get_jwt_identity())
 
         try:
             order = OrderService.create(current_user_id, validated_data)
+        except AddressNotFoundError as e:
+            abort(404, message=str(e))
+        except ShippingAddressRequiredError as e:
+            abort(422, message=str(e))
         except ProductNotFoundError as e:
             abort(404, message=str(e))
         except InsufficientStockError as e:
@@ -169,3 +177,31 @@ class OrderDetail(MethodView):
             response_data['data']['refund_note'] = refund_note
 
         return jsonify(response_data), 200
+
+
+@orders_blp.route('/<int:order_id>/address')
+class OrderAddress(MethodView):
+
+    @orders_blp.arguments(ChangeOrderAddressSchema)
+    @roles_required('buyer')
+    def put(self, validated_data, order_id):
+        current_user_id = int(get_jwt_identity())
+
+        try:
+            order = OrderService.change_address(
+                order_id, validated_data['address_id'], user_id=current_user_id
+            )
+        except OrderNotFoundError as e:
+            abort(404, message=str(e))
+        except AddressNotFoundError as e:
+            abort(404, message=str(e))
+        except OrderPermissionError as e:
+            abort(403, message=str(e))
+        except AddressChangeNotAllowedError as e:
+            abort(409, message=str(e))
+
+        return jsonify({
+            'message': 'shipping address updated',
+            'status': True,
+            'data': OrderDetailResponseSchema().dump(order),
+        }), 200

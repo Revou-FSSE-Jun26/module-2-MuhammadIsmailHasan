@@ -339,12 +339,21 @@ def seed_orders():
                     'sub_total': sub_total
                 })
 
+            default_address = UserAddress.query.filter_by(
+                user_id=order_data['user'].id, is_default=True, is_active=True
+            ).first()
+
             order = Order(
                 user_id=order_data['user'].id,
                 total_amount=total_amount,
                 status=order_data['status'],
                 is_active=order_data.get('is_active', True),
-                ordered_at=utcnow() - timedelta(days=len(orders_data))
+                ordered_at=utcnow() - timedelta(days=len(orders_data)),
+                shipping_recipient_name=default_address.recipient_name if default_address else None,
+                shipping_phone=default_address.phone if default_address else None,
+                shipping_address_line=default_address.address_line if default_address else None,
+                shipping_city=default_address.city if default_address else None,
+                shipping_postal_code=default_address.postal_code if default_address else None,
             )
             db.session.add(order)
             db.session.flush()
