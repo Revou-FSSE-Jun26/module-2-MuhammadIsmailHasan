@@ -1,7 +1,7 @@
 from app.repositories.product_repository import ProductRepository
 from app.models.categories import Category
 from app.validation import ACTIVE_ORDER_STATUSES
-from app.slug import slugify
+from app.utils.slug import slugify
 
 
 class ProductNotFoundError(Exception):

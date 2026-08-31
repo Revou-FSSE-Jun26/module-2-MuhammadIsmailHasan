@@ -1,9 +1,9 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint
-from flask import jsonify
 from sqlalchemy import text
 
 from app.extensions import db
+from app.utils.http import make_response
 
 health_blp = Blueprint(
     'health',
@@ -24,12 +24,9 @@ class HealthCheck(MethodView):
             database_ok = False
             db.session.rollback()
 
-        status_code = 200 if database_ok else 503
-
-        return jsonify({
-            'status': database_ok,
-            'message': 'healthy' if database_ok else 'unhealthy',
-            'data': {
-                'database': 'up' if database_ok else 'down',
-            },
-        }), status_code
+        return make_response(
+            'healthy' if database_ok else 'unhealthy',
+            {'database': 'up' if database_ok else 'down'},
+            status_code=200 if database_ok else 503,
+            status=database_ok,
+        )

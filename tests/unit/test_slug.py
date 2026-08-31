@@ -1,6 +1,6 @@
 import pytest
 
-from app.slug import slugify
+from app.utils.slug import slugify
 
 
 @pytest.mark.parametrize('name,expected', [

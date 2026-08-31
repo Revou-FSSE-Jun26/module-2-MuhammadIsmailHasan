@@ -1,5 +1,7 @@
 from marshmallow import Schema, fields, validate, pre_load
 
+from app.utils.text import strip_or_none
+
 
 class CategoryQuerySchema(Schema):
     name = fields.String(load_default=None)
@@ -24,10 +26,8 @@ class CreateCategorySchema(Schema):
 
     @pre_load
     def strip_name(self, data, **kwargs):
-        if 'name' in data and isinstance(data['name'], str):
-            data['name'] = data['name'].strip()
-            if not data['name']:
-                data['name'] = None
+        if 'name' in data:
+            data['name'] = strip_or_none(data['name'])
         return data
 
 
@@ -40,10 +40,8 @@ class UpdateCategorySchema(Schema):
 
     @pre_load
     def strip_name(self, data, **kwargs):
-        if 'name' in data and isinstance(data['name'], str):
-            data['name'] = data['name'].strip()
-            if not data['name']:
-                data['name'] = None
+        if 'name' in data:
+            data['name'] = strip_or_none(data['name'])
         return data
 
 

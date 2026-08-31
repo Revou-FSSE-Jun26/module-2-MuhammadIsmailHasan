@@ -1,7 +1,5 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from flask import jsonify
-from flask_jwt_extended import get_jwt_identity
 
 from app.schemas.product_schema import (
     CreateProductSchema,
@@ -17,6 +15,8 @@ from app.services.product_service import (
     ProductHasActiveOrdersError,
 )
 from app.auth import roles_required
+from app.utils.auth_context import current_user_id
+from app.utils.http import make_response, paginate_meta
 
 products_blp = Blueprint(
     'products',
@@ -48,33 +48,25 @@ class ProductList(MethodView):
             limit=query_params['limit'],
         )
 
-        return jsonify({
-            'message': 'get all products success',
-            'status': True,
-            'data': ProductResponseSchema(many=True).dump(paginated.items),
-            'pagination': {
-                'page': paginated.page,
-                'limit': paginated.per_page,
-                'total_items': paginated.total,
-                'total_pages': paginated.pages,
-            },
-        }), 200
+        return make_response(
+            'get all products success',
+            ProductResponseSchema(many=True).dump(paginated.items),
+            pagination=paginate_meta(paginated),
+        )
 
     @products_blp.arguments(CreateProductSchema)
     @roles_required('seller', 'admin')
     def post(self, validated_data):
-        current_user_id = int(get_jwt_identity())
-
         try:
-            product = ProductService.create(validated_data, seller_id=current_user_id)
+            product = ProductService.create(validated_data, seller_id=current_user_id())
         except CategoryNotFoundError as e:
             abort(404, message=str(e))
 
-        return jsonify({
-            'message': 'product created',
-            'status': True,
-            'data': ProductResponseSchema().dump(product),
-        }), 201
+        return make_response(
+            'product created',
+            ProductResponseSchema().dump(product),
+            201,
+        )
 
 
 @products_blp.route('/slug/<string:slug>')
@@ -87,11 +79,10 @@ class ProductBySlug(MethodView):
         except ProductNotFoundError as e:
             abort(404, message=str(e))
 
-        return jsonify({
-            'message': 'success get product',
-            'status': True,
-            'data': ProductDetailResponseSchema().dump(product),
-        }), 200
+        return make_response(
+            'success get product',
+            ProductDetailResponseSchema().dump(product),
+        )
 
 
 @products_blp.route('/<int:product_id>')
@@ -104,11 +95,10 @@ class ProductDetail(MethodView):
         except ProductNotFoundError as e:
             abort(404, message=str(e))
 
-        return jsonify({
-            'message': 'success get product',
-            'status': True,
-            'data': ProductDetailResponseSchema().dump(product),
-        }), 200
+        return make_response(
+            'success get product',
+            ProductDetailResponseSchema().dump(product),
+        )
 
     @products_blp.arguments(UpdateProductSchema)
     @roles_required('seller', 'admin')
@@ -120,11 +110,10 @@ class ProductDetail(MethodView):
         except CategoryNotFoundError as e:
             abort(404, message=str(e))
 
-        return jsonify({
-            'message': 'success update product',
-            'status': True,
-            'data': ProductResponseSchema().dump(product),
-        }), 200
+        return make_response(
+            'success update product',
+            ProductResponseSchema().dump(product),
+        )
 
     @roles_required('seller', 'admin')
     def delete(self, product_id):
@@ -135,7 +124,4 @@ class ProductDetail(MethodView):
         except ProductHasActiveOrdersError as e:
             abort(400, message=str(e))
 
-        return jsonify({
-            'message': 'success delete product',
-            'status': True,
-        }), 200
+        return make_response('success delete product')

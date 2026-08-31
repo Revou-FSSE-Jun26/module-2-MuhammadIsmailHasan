@@ -1,11 +1,6 @@
 from marshmallow import Schema, fields, validate, pre_load
 
-
-def _strip(value):
-    if isinstance(value, str):
-        stripped = value.strip()
-        return stripped if stripped else None
-    return value
+from app.utils.text import strip_or_none
 
 
 class CreateAddressSchema(Schema):
@@ -46,7 +41,7 @@ class CreateAddressSchema(Schema):
             'address_line', 'city', 'postal_code',
         ):
             if field in data:
-                data[field] = _strip(data[field])
+                data[field] = strip_or_none(data[field])
         return data
 
 
@@ -66,7 +61,7 @@ class UpdateAddressSchema(Schema):
             'address_line', 'city', 'postal_code',
         ):
             if field in data:
-                data[field] = _strip(data[field])
+                data[field] = strip_or_none(data[field])
         return data
 
 

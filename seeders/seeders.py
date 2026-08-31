@@ -9,7 +9,7 @@ from app.models import (
     User, Product, Category, Order, OrderItem, ProductImage, Cart, CartItem,
     UserProfile, UserAddress
 )
-from app.slug import slugify
+from app.utils.slug import slugify
 import bcrypt
 from datetime import timedelta
 from decimal import Decimal

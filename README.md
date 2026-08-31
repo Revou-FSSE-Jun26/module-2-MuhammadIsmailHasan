@@ -314,7 +314,14 @@ module-2/
 │       ├── products.py
 │       ├── product_images.py
 │       ├── orders.py
-│       └── carts.py
+│       ├── carts.py
+│       └── health.py
+│   └── utils/                 # shared helpers
+│       ├── http.py            # make_response, paginate_meta (uniform response envelope)
+│       ├── auth_context.py    # current_user_id, current_role (JWT helpers)
+│       ├── text.py            # strip_or_none (schema input normalization)
+│       ├── timezone.py        # utcnow
+│       └── slug.py            # slugify
 ├── config/                    # base / development / production configs
 ├── migrations/                # Flask-Migrate (Alembic) migrations
 ├── seeders/                   # database seeding (users, profiles, addresses, categories, products, orders)
@@ -340,7 +347,8 @@ module-2/
 │       ├── test_product_images.py
 │       ├── test_orders.py
 │       ├── test_order_address.py
-│       └── test_cart.py
+│       ├── test_cart.py
+│       └── test_health.py
 ├── locust/
 │   └── locustfile.py          # performance / load test (customer journey)
 ├── images/                    # diagrams and test-result evidence

@@ -1,11 +1,11 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from flask import jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from app.schemas.user_schema import LoginSchema, UserResponseSchema
 from app.services.auth_service import AuthService, InvalidCredentialsError
 from app.services.user_service import UserNotFoundError
+from app.utils.http import make_response
 
 auth_blp = Blueprint(
     'auth',
@@ -28,13 +28,12 @@ class AuthLogin(MethodView):
         except InvalidCredentialsError as e:
             abort(401, message=str(e))
 
-        return jsonify({
-            'status': True,
-            'message': 'login successful',
-            'access_token': access_token,
-            'refresh_token': refresh_token,
-            'data': UserResponseSchema().dump(user),
-        }), 200
+        return make_response(
+            'login successful',
+            UserResponseSchema().dump(user),
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
 
 
 @auth_blp.route('/refresh')
@@ -49,8 +48,7 @@ class AuthRefresh(MethodView):
         except UserNotFoundError as e:
             abort(404, message=str(e))
 
-        return jsonify({
-            'status': True,
-            'message': 'create new access token successful',
-            'access_token': access_token,
-        }), 200
+        return make_response(
+            'create new access token successful',
+            access_token=access_token,
+        )

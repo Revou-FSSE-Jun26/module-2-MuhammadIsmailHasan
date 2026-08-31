@@ -1,7 +1,5 @@
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
-from flask import jsonify
-from flask_jwt_extended import get_jwt_identity
 
 from app.schemas.user_profile_schema import (
     UpdateProfileSchema,
@@ -12,6 +10,8 @@ from app.services.user_profile_service import (
     ProfileNotFoundError,
 )
 from app.auth import roles_required
+from app.utils.auth_context import current_user_id
+from app.utils.http import make_response
 
 profile_blp = Blueprint(
     'profile',
@@ -26,27 +26,22 @@ class ProfileResource(MethodView):
 
     @roles_required('buyer', 'seller', 'admin')
     def get(self):
-        current_user_id = int(get_jwt_identity())
-
         try:
-            profile = UserProfileService.get(current_user_id)
+            profile = UserProfileService.get(current_user_id())
         except ProfileNotFoundError as e:
             abort(404, message=str(e))
 
-        return jsonify({
-            'message': 'get profile success',
-            'status': True,
-            'data': ProfileResponseSchema().dump(profile),
-        }), 200
+        return make_response(
+            'get profile success',
+            ProfileResponseSchema().dump(profile),
+        )
 
     @profile_blp.arguments(UpdateProfileSchema)
     @roles_required('buyer', 'seller', 'admin')
     def put(self, validated_data):
-        current_user_id = int(get_jwt_identity())
-        profile = UserProfileService.upsert(current_user_id, validated_data)
+        profile = UserProfileService.upsert(current_user_id(), validated_data)
 
-        return jsonify({
-            'message': 'profile saved',
-            'status': True,
-            'data': ProfileResponseSchema().dump(profile),
-        }), 200
+        return make_response(
+            'profile saved',
+            ProfileResponseSchema().dump(profile),
+        )

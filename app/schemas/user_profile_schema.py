@@ -1,11 +1,6 @@
 from marshmallow import Schema, fields, validate, pre_load
 
-
-def _strip(value):
-    if isinstance(value, str):
-        value = value.strip()
-        return value if value else None
-    return value
+from app.utils.text import strip_or_none
 
 
 class UpdateProfileSchema(Schema):
@@ -26,7 +21,7 @@ class UpdateProfileSchema(Schema):
     def strip_fields(self, data, **kwargs):
         for field in ('full_name', 'phone', 'avatar_url'):
             if field in data:
-                data[field] = _strip(data[field])
+                data[field] = strip_or_none(data[field])
         return data
 
 

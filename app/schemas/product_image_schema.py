@@ -1,5 +1,7 @@
 from marshmallow import Schema, fields, validate, pre_load
 
+from app.utils.text import strip_or_none
+
 
 class CreateProductImageSchema(Schema):
     url = fields.String(
@@ -10,10 +12,8 @@ class CreateProductImageSchema(Schema):
 
     @pre_load
     def strip_url(self, data, **kwargs):
-        if 'url' in data and isinstance(data['url'], str):
-            data['url'] = data['url'].strip()
-            if not data['url']:
-                data['url'] = None
+        if 'url' in data:
+            data['url'] = strip_or_none(data['url'])
         return data
 
 
@@ -25,10 +25,8 @@ class UpdateProductImageSchema(Schema):
 
     @pre_load
     def strip_url(self, data, **kwargs):
-        if 'url' in data and isinstance(data['url'], str):
-            data['url'] = data['url'].strip()
-            if not data['url']:
-                data['url'] = None
+        if 'url' in data:
+            data['url'] = strip_or_none(data['url'])
         return data
 
 

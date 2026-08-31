@@ -1,5 +1,7 @@
 from marshmallow import Schema, fields, validate, validates, ValidationError, pre_load
 
+from app.utils.text import strip_or_none
+
 
 class ProductQuerySchema(Schema):
     name = fields.String(load_default=None)
@@ -44,10 +46,8 @@ class CreateProductSchema(Schema):
 
     @pre_load
     def strip_name(self, data, **kwargs):
-        if 'name' in data and isinstance(data['name'], str):
-            data['name'] = data['name'].strip()
-            if not data['name']:
-                data['name'] = None
+        if 'name' in data:
+            data['name'] = strip_or_none(data['name'])
         return data
 
     @validates('price')
@@ -87,10 +87,8 @@ class UpdateProductSchema(Schema):
 
     @pre_load
     def strip_name(self, data, **kwargs):
-        if 'name' in data and isinstance(data['name'], str):
-            data['name'] = data['name'].strip()
-            if not data['name']:
-                data['name'] = None
+        if 'name' in data:
+            data['name'] = strip_or_none(data['name'])
         return data
 
     @validates('price')
