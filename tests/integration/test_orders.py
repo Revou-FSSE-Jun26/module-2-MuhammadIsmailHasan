@@ -203,33 +203,33 @@ class TestGetOrdersSellerScope:
 
 class TestUpdateOrderStatus:
 
-    def test_seller_owning_product_can_advance(self, client, seed_users, seed_order):
+    def test_seller_owning_product_can_confirm_payment(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'processing'
+            'status': 'paid'
         }, headers=auth_header(token))
         data = response.get_json()
 
         assert response.status_code == 200
-        assert data['data']['status'] == 'processing'
+        assert data['data']['status'] == 'paid'
 
-    def test_admin_can_advance(self, client, seed_users, seed_order):
+    def test_admin_can_confirm_payment(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'admin@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'processing'
+            'status': 'paid'
         }, headers=auth_header(token))
         data = response.get_json()
 
         assert response.status_code == 200
-        assert data['data']['status'] == 'processing'
+        assert data['data']['status'] == 'paid'
 
-    def test_buyer_cannot_update_status(self, client, seed_users, seed_order):
+    def test_buyer_cannot_advance_fulfillment(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'buyer@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'processing'
+            'status': 'paid'
         }, headers=auth_header(token))
 
         assert response.status_code == 403
@@ -238,20 +238,41 @@ class TestUpdateOrderStatus:
         token = get_auth_token(client, 'seller2@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'processing'
+            'status': 'paid'
         }, headers=auth_header(token))
 
         assert response.status_code == 403
 
-    def test_put_cancelled_is_rejected(self, client, seed_users, seed_order):
+    def test_seller_can_cancel_via_put_and_restores_stock(self, client, db, seed_users, seed_order, seed_products):
+        seed_order.status = 'processing'
+        db.session.commit()
+        stock_before = seed_products[0].stock
+        qty = seed_order.items[0].quantity
+
         token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
             'status': 'cancelled'
         }, headers=auth_header(token))
+        data = response.get_json()
 
-        # PUT no longer accepts 'cancelled'; the schema rejects it
-        assert response.status_code == 422
+        assert response.status_code == 200
+        assert data['data']['status'] == 'cancelled'
+        assert data['data']['refund_note'] == 'payment refund will be processed'
+        db.session.refresh(seed_products[0])
+        assert seed_products[0].stock == stock_before + qty
+
+    def test_buyer_can_cancel_waiting_order_no_refund_note(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'cancelled'
+        }, headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['status'] == 'cancelled'
+        assert data['data'].get('refund_note') is None
 
     def test_update_status_skip_step(self, client, seed_users, seed_order):
         token = get_auth_token(client, 'seller@test.com', 'password123')
@@ -267,7 +288,7 @@ class TestUpdateOrderStatus:
         token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
-            'status': 'processing'
+            'status': 'paid'
         }, headers=auth_header(token))
         data = response.get_json()
 
@@ -338,7 +359,9 @@ class TestShipTracking:
         assert data['data']['status'] == 'shipped'
         assert data['data']['tracking_id'] == 'JNE-0001234567'
 
-    def test_tracking_id_ignored_on_processing(self, client, seed_users, seed_order):
+    def test_tracking_id_ignored_on_processing(self, client, db, seed_users, seed_order):
+        seed_order.status = 'paid'
+        db.session.commit()
         token = get_auth_token(client, 'seller@test.com', 'password123')
 
         response = client.put(f'/api/v1/orders/{seed_order.id}', json={
@@ -357,7 +380,6 @@ class TestShipTracking:
             'status': 'shipped', 'tracking_id': 'JNE-0001234567'
         }, headers=auth_header(token))
 
-        # advancing to delivered does not clear the tracking id
         client.put(f'/api/v1/orders/{seed_order.id}', json={
             'status': 'delivered'
         }, headers=auth_header(token))
@@ -369,20 +391,9 @@ class TestShipTracking:
 
 class TestDeleteOrder:
 
-    def test_delete_waiting_for_payment(self, client, seed_users, seed_order, seed_products):
-        token = get_auth_token(client, 'buyer@test.com', 'password123')
-
-        response = client.delete(f'/api/v1/orders/{seed_order.id}',
-                                 headers=auth_header(token))
-        data = response.get_json()
-
-        assert response.status_code == 200
-        assert data['data']['status'] == 'cancelled'
-
-    def test_delete_processing_has_refund_note(self, client, seed_users, seed_order, db):
-        seed_order.status = 'processing'
+    def test_delete_cancelled_order(self, client, seed_users, seed_order, db):
+        seed_order.status = 'cancelled'
         db.session.commit()
-
         token = get_auth_token(client, 'buyer@test.com', 'password123')
 
         response = client.delete(f'/api/v1/orders/{seed_order.id}',
@@ -391,7 +402,28 @@ class TestDeleteOrder:
 
         assert response.status_code == 200
         assert data['data']['status'] == 'cancelled'
-        assert data['data']['refund_note'] == 'payment refund will be processed'
+        assert 'refund_note' not in data['data']
+
+    def test_delete_delivered_order(self, client, seed_users, seed_order, db):
+        seed_order.status = 'delivered'
+        db.session.commit()
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.delete(f'/api/v1/orders/{seed_order.id}',
+                                 headers=auth_header(token))
+        data = response.get_json()
+
+        assert response.status_code == 200
+        assert data['data']['status'] == 'delivered'
+
+    def test_delete_waiting_for_payment_blocked(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.delete(f'/api/v1/orders/{seed_order.id}',
+                                 headers=auth_header(token))
+
+        assert response.status_code == 400
+        assert "cannot delete order with status 'waiting_for_payment'" in response.get_json()['message']
 
     def test_delete_shipped_blocked(self, client, seed_users, seed_order, db):
         seed_order.status = 'shipped'
@@ -403,19 +435,7 @@ class TestDeleteOrder:
                                  headers=auth_header(token))
 
         assert response.status_code == 400
-        assert "cannot cancel order with status 'shipped'" in response.get_json()['message']
-
-    def test_delete_delivered_blocked(self, client, seed_users, seed_order, db):
-        seed_order.status = 'delivered'
-        db.session.commit()
-
-        token = get_auth_token(client, 'buyer@test.com', 'password123')
-
-        response = client.delete(f'/api/v1/orders/{seed_order.id}',
-                                 headers=auth_header(token))
-
-        assert response.status_code == 400
-        assert "cannot cancel order with status 'delivered'" in response.get_json()['message']
+        assert "cannot delete order with status 'shipped'" in response.get_json()['message']
 
     def test_delete_order_not_found(self, client, seed_users):
         token = get_auth_token(client, 'buyer@test.com', 'password123')
@@ -429,6 +449,9 @@ class TestDeleteOrder:
         from app.models.users import User
         from app.auth import hash_password
 
+        seed_order.status = 'cancelled'
+        db.session.commit()
+
         other = User(username='other_buyer', email='other@test.com',
                      password_hash=hash_password('password123'), role='buyer')
         db.session.add(other)
@@ -440,24 +463,22 @@ class TestDeleteOrder:
 
         assert response.status_code == 403
 
-    def test_seller_owning_product_can_cancel_and_restores_stock(self, client, seed_users, seed_order, seed_products, db):
-        seed_order.status = 'processing'
+    def test_delete_does_not_restore_stock(self, client, seed_users, seed_order, seed_products, db):
+        seed_order.status = 'cancelled'
         db.session.commit()
         stock_before = seed_products[0].stock
-        qty = seed_order.items[0].quantity
 
         token = get_auth_token(client, 'seller@test.com', 'password123')
         response = client.delete(f'/api/v1/orders/{seed_order.id}',
                                  headers=auth_header(token))
-        data = response.get_json()
 
         assert response.status_code == 200
-        assert data['data']['status'] == 'cancelled'
-        assert data['data']['refund_note'] == 'payment refund will be processed'
         db.session.refresh(seed_products[0])
-        assert seed_products[0].stock == stock_before + qty
+        assert seed_products[0].stock == stock_before
 
-    def test_seller_without_owned_product_forbidden_to_cancel(self, client, seed_users, seed_order):
+    def test_seller_without_owned_product_forbidden_to_delete(self, client, seed_users, seed_order, db):
+        seed_order.status = 'cancelled'
+        db.session.commit()
         token = get_auth_token(client, 'seller2@test.com', 'password123')
 
         response = client.delete(f'/api/v1/orders/{seed_order.id}',

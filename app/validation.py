@@ -1,19 +1,25 @@
 ALLOWED_TRANSITIONS = {
-    'waiting_for_payment': ['processing'],
-    'processing': ['shipped'],
+    'waiting_for_payment': ['paid', 'cancelled'],
+    'paid': ['processing', 'cancelled'],
+    'processing': ['shipped', 'cancelled'],
     'shipped': ['delivered'],
-    'delivered': [],
+    'delivered': ['returned'],
+    'returned': [],
     'cancelled': [],
 }
 
 ROLE_ALLOWED_TARGET_STATUSES = {
-    'buyer': set(),
-    'seller': {'processing', 'shipped', 'delivered'},
-    'admin': {'processing', 'shipped', 'delivered'},
+    'buyer': {'returned', 'cancelled'},
+    'seller': {'paid', 'processing', 'shipped', 'delivered', 'cancelled'},
+    'admin': {'paid', 'processing', 'shipped', 'delivered', 'returned', 'cancelled'},
 }
 
-UNDELETABLE_STATUSES = ('shipped', 'delivered')
+RESTOCK_STATUSES = ('cancelled', 'returned')
 
-TERMINAL_STATUSES = ('cancelled', 'delivered')
+REFUNDABLE_STATUSES = ('paid', 'processing')
 
-ACTIVE_ORDER_STATUSES = ('waiting_for_payment', 'processing', 'shipped')
+UNDELETABLE_STATUSES = ('waiting_for_payment', 'paid', 'processing', 'shipped')
+
+TERMINAL_STATUSES = ('cancelled', 'returned')
+
+ACTIVE_ORDER_STATUSES = ('waiting_for_payment', 'paid', 'processing', 'shipped')

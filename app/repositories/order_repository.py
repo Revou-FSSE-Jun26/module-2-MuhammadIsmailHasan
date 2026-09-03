@@ -4,6 +4,7 @@ from app.models.orders import Order, OrderItem
 from app.models.products import Product
 from app.models.product_images import ProductImage
 from app.extensions import db
+from app.utils.timezone import utcnow
 from decimal import Decimal
 
 
@@ -97,25 +98,27 @@ class OrderRepository:
         return order
 
     @staticmethod
-    def update_status(order, new_status, updated_by=None, tracking_id=None):
+    def update_status(order, new_status, updated_by=None, tracking_id=None, restock=False):
         order.status = new_status
         order.updated_by = updated_by
         if tracking_id is not None:
             order.tracking_id = tracking_id
+
+        if restock:
+            for item in order.items:
+                product = Product.query.get(item.product_id)
+                if product:
+                    product.stock += item.quantity
+
         db.session.commit()
         return order
 
     @staticmethod
-    def cancel_order(order, updated_by=None):
-        order.status = 'cancelled'
+    def delete_order(order, updated_by=None):
         order.is_active = False
         order.updated_by = updated_by
-
-        for item in order.items:
-            product = Product.query.get(item.product_id)
-            if product:
-                product.stock += item.quantity
-
+        order.deleted_at = utcnow()
+        
         db.session.commit()
         return order
 

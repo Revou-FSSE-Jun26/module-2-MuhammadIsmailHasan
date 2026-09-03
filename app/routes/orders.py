@@ -109,10 +109,10 @@ class OrderDetail(MethodView):
         )
 
     @orders_blp.arguments(UpdateOrderStatusSchema)
-    @roles_required('seller', 'admin')
+    @roles_required('buyer', 'seller', 'admin')
     def put(self, validated_data, order_id):
         try:
-            order = OrderService.update_status(
+            order, refund_note = OrderService.update_status(
                 order_id, validated_data,
                 user_id=current_user_id(), role=current_role(),
             )
@@ -125,6 +125,9 @@ class OrderDetail(MethodView):
         except InvalidStatusTransitionError as e:
             abort(400, message=str(e))
 
+        if refund_note:
+            order.refund_note = refund_note
+
         return make_response(
             'success update order status',
             OrderResponseSchema().dump(order),
@@ -135,7 +138,7 @@ class OrderDetail(MethodView):
         user_id = current_user_id()
 
         try:
-            order, refund_note = OrderService.cancel(
+            order = OrderService.delete(
                 order_id, user_id=user_id, role=current_role()
             )
         except OrderNotFoundError as e:
@@ -146,14 +149,12 @@ class OrderDetail(MethodView):
             abort(400, message=str(e))
 
         current_app.logger.info(
-            'order %s cancelled by user %s', order.id, user_id
+            'order %s deleted by user %s', order.id, user_id
         )
 
         data = {'id': order.id, 'status': order.status}
-        if refund_note:
-            data['refund_note'] = refund_note
-
-        return make_response('order cancelled successfully', data)
+        
+        return make_response('order deleted successfully', data)
 
 
 @orders_blp.route('/<int:order_id>/address')

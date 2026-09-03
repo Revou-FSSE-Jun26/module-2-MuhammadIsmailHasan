@@ -5,8 +5,10 @@ from app.utils.timezone import utcnow
 class Order(db.Model):
     __tablename__ = 'orders'
     __table_args__ = (
+        # updated at the migration
+        # ('waiting_for_payment', 'paid', 'processing', 'shipped', 'delivered', 'returned', 'cancelled')
         db.CheckConstraint(
-            "status IN ('waiting_for_payment', 'processing', 'shipped', 'delivered', 'cancelled')",
+            "status IN ('waiting_for_payment', 'paid', 'processing', 'shipped', 'delivered', 'returned', 'cancelled')",
             name='ck_orders_status_valid'
         ),
         db.CheckConstraint(
@@ -20,6 +22,7 @@ class Order(db.Model):
     total_amount = db.Column(db.Numeric(14, 2), nullable=False)
     status = db.Column(db.String(25), nullable=False, server_default='waiting_for_payment')
     ordered_at = db.Column(db.DateTime, default=utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_orders_updated_by'), nullable=True, index=True)
 
     shipping_recipient_name = db.Column(db.String(150))
@@ -49,11 +52,13 @@ class Order(db.Model):
             'shipping_city': self.shipping_city,
             'shipping_postal_code': self.shipping_postal_code,
             'tracking_id': self.tracking_id,
+            'deleted_at': self.deleted_at if self.deleted_at is not None else None
         }
 
     def to_dict_detail(self):
         result = self.to_dict()
         result['is_active'] = self.is_active
+        result['deleted_at'] = self.deleted_at.isoformat() if self.deleted_at else None
         result['items'] = [item.to_dict() for item in self.items]
         return result
 

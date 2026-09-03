@@ -5,6 +5,8 @@ from app.validation import (
     ROLE_ALLOWED_TARGET_STATUSES,
     UNDELETABLE_STATUSES,
     TERMINAL_STATUSES,
+    RESTOCK_STATUSES,
+    REFUNDABLE_STATUSES,
 )
 
 
@@ -186,7 +188,7 @@ class OrderService:
                 raise OrderPermissionError(
                     "you don't have permission to update this order"
                 )
-        else:
+        elif order.user_id != user_id:
             raise OrderPermissionError(
                 "you don't have permission to update this order"
             )
@@ -213,12 +215,21 @@ class OrderService:
                     "tracking_id is required to mark an order as shipped"
                 )
 
-        return OrderRepository.update_status(
-            order, new_status, updated_by=user_id, tracking_id=tracking_id
+        restock = new_status in RESTOCK_STATUSES
+
+        refund_note = None
+        if new_status in RESTOCK_STATUSES and order.status in REFUNDABLE_STATUSES:
+            refund_note = 'payment refund will be processed'
+
+        updated_order = OrderRepository.update_status(
+            order, new_status, updated_by=user_id,
+            tracking_id=tracking_id, restock=restock,
         )
 
+        return updated_order, refund_note
+
     @staticmethod
-    def cancel(order_id, user_id=None, role=None):
+    def delete(order_id, user_id=None, role=None):
         order = OrderRepository.get_active_by_id(order_id)
         if not order:
             raise OrderNotFoundError("order not found")
@@ -226,20 +237,16 @@ class OrderService:
         if role == 'admin':
             pass
         elif role == 'seller':
-            if not OrderRepository.order_has_seller_product(order.id, user_id):
-                raise OrderPermissionError("you don't have permission to cancel this order")
+            if not OrderRepository.order_has_seller_product(order_id, user_id):
+                raise OrderPermissionError("you don't have permission to delete this order")
         elif order.user_id != user_id:
-            raise OrderPermissionError("you don't have permission to cancel this order")
+            raise OrderPermissionError("you don't have permission to delete this order")
 
         if order.status in UNDELETABLE_STATUSES:
             raise OrderCannotBeDeletedError(
-                f"cannot cancel order with status '{order.status}'"
+                f"cannot delete order with status '{order.status}'"
             )
 
-        refund_note = None
-        if order.status == 'processing':
-            refund_note = 'payment refund will be processed'
+        OrderRepository.delete_order(order, updated_by=user_id)
 
-        OrderRepository.cancel_order(order, updated_by=user_id)
-
-        return order, refund_note
+        return order

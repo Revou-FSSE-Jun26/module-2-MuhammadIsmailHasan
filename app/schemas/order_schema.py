@@ -44,8 +44,8 @@ class UpdateOrderStatusSchema(Schema):
     status = fields.String(
         required=True,
         validate=validate.OneOf(
-            ['processing', 'shipped', 'delivered'],
-            error="status must be one of: processing, shipped, delivered",
+            ['paid', 'processing', 'shipped', 'delivered', 'returned', 'cancelled'],
+            error="status must be one of: paid, processing, shipped, delivered, returned, cancelled",
         ),
         error_messages={"required": "status is required"},
     )
@@ -60,7 +60,7 @@ class OrderQuerySchema(Schema):
     status = fields.String(
         load_default=None,
         validate=validate.OneOf(
-            ['waiting_for_payment', 'processing', 'shipped', 'delivered', 'cancelled'],
+            ['waiting_for_payment', 'paid', 'processing', 'shipped', 'delivered', 'returned', 'cancelled'],
         ),
     )
     include_deleted = fields.Boolean(load_default=False)
@@ -116,6 +116,7 @@ class OrderResponseSchema(Schema):
     tracking_id = fields.String(allow_none=True)
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')
+    refund_note = fields.String(allow_none=True)
 
     def get_total_items(self, obj):
         return len(obj.items)
@@ -138,6 +139,7 @@ class OrderDetailResponseSchema(Schema):
     shipping_postal_code = fields.String(allow_none=True)
     tracking_id = fields.String(allow_none=True)
     is_active = fields.Boolean()
+    deleted_at = fields.DateTime(format='iso', allow_none=True)
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')
     items = fields.List(fields.Nested(OrderItemResponseSchema))
