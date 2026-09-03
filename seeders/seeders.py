@@ -291,6 +291,13 @@ def seed_orders():
         },
         {
             'user': buyer,
+            'status': 'paid',
+            'items': [
+                {'product': products[1], 'quantity': 1},
+            ]
+        },
+        {
+            'user': buyer,
             'status': 'processing',
             'items': [
                 {'product': products[2], 'quantity': 1},
@@ -311,6 +318,14 @@ def seed_orders():
             'items': [
                 {'product': products[0], 'quantity': 2},
                 {'product': products[4], 'quantity': 1},
+            ]
+        },
+        {
+            'user': buyer2,
+            'status': 'returned',
+            'tracking_id': 'JNE-0009876543',
+            'items': [
+                {'product': products[2], 'quantity': 1},
             ]
         },
         {
