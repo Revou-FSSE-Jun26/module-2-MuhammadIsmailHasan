@@ -1,875 +1,480 @@
 # Revoshop
 
-An e-commerce backend API built with Flask, demonstrating a layered architecture (routes → services → repositories), JWT authentication, and role-based access control.
+An e-commerce backend API built with Flask. It demonstrates a layered
+architecture (routes → services → repositories), JWT auth, and role-based
+access control.
 
 ## Overview
 
-Revoshop is a hands-on learning project for backend fundamentals: database design, RESTful API design, validation, authentication, automated testing (unit + integration), and load testing. The codebase follows a clean separation of concerns with a service/repository pattern and schema-based validation.
+Revoshop is a marketplace backend where **buyers** shop and place orders,
+**sellers** manage their own catalog and fulfill orders that contain their
+products, and **admins** operate across the whole platform. It is built as a
+hands-on study of backend fundamentals: relational data modeling, RESTful API
+design, request validation, JWT authentication with role-based access control,
+and a clean separation of concerns.
 
-## Users & Roles
+The codebase follows a layered flow — routes handle HTTP, marshmallow schemas
+validate and serialize, services hold the business rules, and repositories own
+data access — which keeps the logic testable and the layers swappable. It ships
+with unit and integration tests, load testing, security/quality tooling, and a
+Docker setup for both development and production.
 
-Revoshop is a marketplace with three kinds of users. Every account has exactly
-one role, stored on the user and carried inside the JWT, which determines what
-that account is allowed to do.
+## Features Implemented
 
-| Role | Who they are | What they can do |
-|------|--------------|------------------|
-| **buyer** | A customer who shops on the platform | Browse products and categories, place orders, view their **own** orders, and cancel their own orders (via `DELETE`). Buyers **cannot** advance an order's status. |
-| **seller** | A merchant who supplies the catalog | Browse products and categories, create / update / delete products and categories, advance the fulfillment status of orders that contain **their own** products, and cancel those orders (via `DELETE`). Sellers do **not** place orders. |
-| **admin** | A platform operator | Manage the catalog like a seller, act on **any** user's orders (advance status, cancel), and delete **any** user account. Admins do **not** place orders or use the cart — that is a buyer-only flow. |
-
-Notes:
-
-- **Self-registration** creates only `buyer` or `seller` accounts. The `admin`
-  role is privileged and is provisioned separately (e.g. via the seeder), not
-  through the public registration endpoint.
-- **Ownership matters even within a role.** A buyer can only touch their own
-  orders; a seller can only change the status of orders that include one of
-  their own products; only an admin can act across all users and orders.
-- **Products have an owner.** When a seller creates a product it is stamped
-  with their `seller_id`. This ownership is what scopes a seller's control
-  over order status. Products created before this feature have no owner
-  (`seller_id` is null), so only an admin can change the status of orders
-  built from them.
+- **Authentication & authorization** — registration, JWT login/refresh, and a
+  `roles_required` guard enforcing buyer / seller / admin access.
+- **Users & profiles** — account management plus a one-to-one profile (upsert).
+- **Address book** — buyers keep many shipping addresses with exactly one
+  enforced default; soft delete.
+- **Categories & products** — full CRUD with filtering, sorting, and
+  pagination; auto-generated stable slugs; seller ownership; soft delete.
+- **Product images** — one-to-many with server-managed ordering (auto-append)
+  and an atomic reorder endpoint; managed by the owning seller or an admin.
+- **Orders** — buyer checkout with server-side pricing and stock deduction, a
+  full status lifecycle (payment → fulfillment → delivery, plus cancel/return
+  with restock and refund notes), a shipping-address snapshot, and soft delete.
+- **Shopping cart** — one lazy cart per buyer, grouped by seller, with
+  live-computed totals and availability, plus whole / per-seller / partial
+  checkout.
+- **Platform** — a uniform JSON response envelope, centralized error handling,
+  daily-rotating logs, a health check, and OpenAPI/Swagger docs.
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Backend | Python, Flask |
-| API / OpenAPI | flask-smorest |
-| Database | PostgreSQL (psycopg2) |
-| ORM | SQLAlchemy |
-| Migration | Flask-Migrate (Alembic) |
-| Validation | marshmallow |
-| Auth | flask-jwt-extended, bcrypt |
-| Unit & integration testing | pytest, pytest-cov |
-| Performance testing | Locust |
-| Security linting | Bandit |
-| Code quality / linting | Pylint |
-| Dependency audit | pip-audit |
-| Logging | Python logging (daily rotating file) |
-| Containerization | Docker, Docker Compose (dev + prod) |
-| API documentation | Postman, Swagger UI (flask-smorest) |
+Flask · flask-smorest · PostgreSQL · SQLAlchemy · Flask-Migrate · marshmallow ·
+flask-jwt-extended / bcrypt · pytest · Locust · Bandit / Pylint / pip-audit ·
+Docker
 
-## Features
+## Roles at a Glance
 
-- User management (registration, JWT login/refresh)
-- Role-based access control (buyer, seller, admin)
-- User profile (one-to-one with the user; full name, phone, avatar)
-- Shipping address book (one-to-many; buyers keep multiple addresses with exactly one default)
-- Product management (CRUD, filtering, sorting, pagination)
-- Product images (one-to-many; server-managed ordering with auto-append and a reorder endpoint; admin or the owning seller manages them)
-- Product categories (CRUD, plus a dedicated route listing categories with their products)
-- Order management (creation with stock deduction, status transitions, cancel/refund)
-- Shopping cart (grouped by seller, live-computed totals, checkout to order)
-- Schema-based validation and centralized error handling
+Every account has exactly one role, carried in the JWT.
 
-## Business Logic
+| Role | Can do |
+|------|--------|
+| **buyer** | Shop, place orders, view/cancel/return their own orders. Cannot advance fulfillment. |
+| **seller** | Manage their own products/categories, advance and cancel orders containing their products. Does not place orders. |
+| **admin** | Act on any order or account. Does not place orders. |
 
-The main rules the system enforces:
+Self-registration creates only `buyer` or `seller`; `admin` is provisioned via
+the seeder. Ownership is scoped even within a role: a seller only controls
+orders that include one of their own products.
 
-**Users**
+## Order Lifecycle
 
-- Passwords are stored securely (hashed), never in plain text.
-- Usernames and emails must be unique.
+Status changes and soft-deletion are two separate concerns on two endpoints.
+
+```mermaid
+stateDiagram-v2
+    [*] --> waiting_for_payment
+    waiting_for_payment --> paid: seller/admin confirms payment
+    paid --> processing
+    processing --> shipped: requires tracking_id
+    shipped --> delivered
+    delivered --> returned: buyer/admin
+
+    waiting_for_payment --> cancelled
+    paid --> cancelled
+    processing --> cancelled
+
+    cancelled --> [*]
+    returned --> [*]
+```
+
+- **Advance / cancel / return — `PUT /orders/<id>`.** Moves the order to the
+  next valid status. Sellers act only on orders containing their products;
+  buyers may only `cancel` (from `waiting_for_payment`, `paid`, `processing`) or
+  `return` (from `delivered`). Illegal moves return `400`.
+- **Restock.** Moving to `cancelled` or `returned` returns the reserved stock.
+- **Refund note.** Cancelling an order that was already `paid` or `processing`
+  adds a refund note to the response.
+- **Shipping needs a tracking ID.** The `processing → shipped` move must carry a
+  `tracking_id`; it is frozen once set and ignored on any other transition.
+- **Soft delete — `DELETE /orders/<id>`.** Housekeeping only: flips `is_active`
+  off and stamps `deleted_at`. It does **not** change status or restock, and is
+  allowed only once an order is no longer in flight (`delivered`, `returned`,
+  `cancelled`). To cancel, use `PUT`.
+- **Audit.** Every status change records the acting user in `updated_by`.
+
+<details>
+<summary>Full business rules (users, products, orders, cart, images)</summary>
+
+**Users & Profiles**
+
+- Passwords are hashed, never stored in plain text; usernames and emails are unique.
 - You can delete your own account; admins can delete anyone.
-
-**Profiles**
-
-- Every user (buyer, seller, or admin) has at most one profile — a one-to-one
-  extension of the account holding `full_name`, `phone`, and `avatar_url`.
-- There is no separate "create profile" step. The first `PUT /profile` creates
-  it; subsequent calls update the same record (upsert). `GET /profile` returns
-  `404` until the profile has been saved at least once.
-- A user only ever reads or writes their **own** profile, identified from the
-  JWT.
+- Each user has at most one profile (one-to-one). The first `PUT /profile`
+  creates it, later calls update it; `GET /profile` is `404` until saved once.
 
 **Addresses**
 
-- Addresses are a **buyer** concern. Sellers and admins do not ship orders to
-  themselves, so the endpoints are scoped to `buyer` (and `admin` for support),
-  matching the cart. A seller calling them gets `403`.
-- A buyer can keep **many** addresses, but **exactly one is the default** at any
-  time — this is the address checkout will use. The rule is enforced in the
-  service layer:
-  - The **first** address a buyer adds automatically becomes the default.
-  - Setting a new default (`PUT /addresses/<id>/default`, or `is_default: true`
-    on create/update) unsets the previous one, so there is never more than one.
-  - You **cannot delete the default while other addresses exist** (`409`); pick
-    a new default first. Deleting the *last* remaining address is allowed.
-- A database-level partial unique index (`is_default = true` per user) backs up
-  the service rule, so two defaults can never be persisted.
-- Deleting an address is a soft delete (`is_active = false`).
+- A buyer concern (sellers/admins get `403`). A buyer keeps many addresses but
+  exactly one default at a time.
+- The first address becomes the default; setting a new default unsets the old
+  one (backed by a partial unique index). You cannot delete the default while
+  other addresses exist (`409`). Delete is a soft delete.
 
-**Categories**
+**Categories & Products**
 
-- Category names must be unique.
-- Deleting a category hides it instead of erasing it.
-
-**Products**
-
-- A product's category must exist.
-- A product is owned by the seller who created it (`seller_id`). Admin-created
-  products are owned by that admin.
-- Each product has a unique `slug` generated automatically from its name at
-  creation (e.g. `Laptop Pro 15"` → `laptop-pro-15`). Duplicate names get a
-  numeric suffix (`gadget-x`, `gadget-x-2`). The slug is fixed once set —
-  renaming a product does not change it, so links stay stable. Products can be
-  fetched by slug via `GET /products/slug/<slug>`.
-- A product can't be deleted while it's part of an active order.
-- Deleting a product hides it instead of erasing it.
+- Category and product deletes are soft deletes; category names are unique.
+- A product's category must exist. Each product is owned by its creator
+  (`seller_id`) and gets a unique auto-generated `slug` fixed at creation.
+- A product cannot be deleted while it is part of an active order.
 
 **Orders**
 
-- Only **buyers** place orders. Sellers and admins do not create orders or use
-  the cart (they get `403`); admins still view and act on any order's status.
-- You can only order what's in stock; if any item runs short, the whole order is rejected.
-- Prices and totals are calculated by the server from the product, not sent by the client.
-- Placing an order reduces stock automatically.
-- Buyers see and manage only their own orders; sellers see orders that contain their products; admins see and act on any order.
-- Status progression and cancellation are two separate concerns handled by two
-  different endpoints:
+- Only buyers place orders. Prices and totals are computed server-side; you can
+  only order what is in stock, and placing an order deducts inventory.
+- The shipping address is **snapshotted** onto the order at checkout (copy of
+  the values, not a link), so editing the address book never rewrites past
+  orders. Order creation/checkout take an optional `address_id`, else the
+  default is used; an unresolvable address returns `422`.
+- `PUT /orders/<id>/address` re-snapshots, but only while `waiting_for_payment`
+  (otherwise `409`).
 
-  ```
-  waiting_for_payment → processing → shipped → delivered   (progression: PUT)
-          │                  │
-          └──────────────────┴──────────────→ cancelled    (cancellation: DELETE)
-  ```
+**Product Images**
 
-- **Progressing status (`PUT /orders/<id>`):** moves an order forward one step
-  along `waiting_for_payment → processing → shipped → delivered`. Cancellation
-  is **not** done here.
-
-  | Role | Allowed |
-  |------|---------|
-  | buyer | Cannot change status. |
-  | seller | Can advance orders that contain one of their own products. |
-  | admin | Can advance any order. |
-
-  A seller acting on an order with no product of theirs gets `403`. An illegal
-  move (skipping a step, going backward) returns `400`. Once an order is
-  `cancelled` or `delivered` it is terminal — any further status change returns
-  `400` with "order is ... and can no longer be modified".
-
-- **Shipping requires a tracking ID.** The `processing → shipped` move must
-  carry a `tracking_id` (the courier waybill / resi number) in the request
-  body; shipping without one returns `422`. It is captured only on that
-  transition — a `tracking_id` sent with any other status change is ignored —
-  and it is frozen once set, so advancing to `delivered` keeps it. Whoever
-  performs the shipped move (seller or admin) provides it. The value is exposed
-  on order responses as `tracking_id`.
-
-- **Cancelling (`DELETE /orders/<id>`):** the single cancel path for everyone.
-  A buyer can cancel their own order; a seller can cancel an order containing
-  one of their products; an admin can cancel any order. Cancellation is
-  identical regardless of who triggers it: the order is set to `cancelled`,
-  soft-deleted, and **the reserved stock is returned**. Cancelling from
-  `processing` also returns a refund note. Shipped and delivered orders cannot
-  be cancelled (`400`).
-
-- **Audit:** every status change and cancellation records the acting user in
-  the order's `updated_by` field.
-
-- **Shipping address is a snapshot, not a reference.** At checkout the order
-  copies the address *values* onto itself (`shipping_recipient_name`,
-  `shipping_phone`, `shipping_address_line`, `shipping_city`,
-  `shipping_postal_code`) rather than storing a link to `user_addresses`. This
-  is the same copy-on-write approach `order_items` uses for `unit_price`: a past
-  order records where it actually shipped, so later editing or deleting the
-  address book never rewrites history. The address book stays purely a
-  convenience for autofilling the next order.
-- **Choosing the address.** Order creation and cart checkout accept an optional
-  `address_id`. If omitted, the buyer's **default** address is used; if given,
-  it must belong to the buyer (otherwise `404`). A buyer with no resolvable
-  address cannot place an order (`422`) — the requirement is enforced at
-  submission time, not before.
-- **Address is editable only before fulfillment.** `PUT /orders/<id>/address`
-  (buyer, owner-only) re-snapshots from a chosen address, but **only while the
-  order is `waiting_for_payment`**. Once it moves to `processing` or beyond the
-  warehouse is acting on it, so the address locks and any change returns `409`.
-
-**Product images**
-
-- A product has many images. Each image has a `url`, an `order`, and an
-  `is_active` flag.
-- Images are always returned sorted by `order` ascending, so the smallest
-  `order` is the primary image. Product list responses expose that single
-  primary `image`; the product detail response includes the full `images`
-  list. Deleting an image is a soft delete (`is_active = false`).
-- **`order` is server-managed, never sent by the client.** On create the new
-  image is auto-appended to the end (`max(order) + 1`, or `0` for the first),
-  so two images can never collide on the same position. `order` is not an
-  accepted input field on create or update — sending it returns `422`. Update
-  only changes the `url`.
-- **Reordering** is done through a dedicated endpoint
-  (`PUT /products/<id>/images/reorder`) that takes the full list of the
-  product's active image IDs in the desired sequence and rewrites their
-  positions to `0, 1, 2, …` in one atomic step. The list must contain exactly
-  the product's active image IDs — no missing, extra, or duplicate IDs —
-  otherwise it returns `422`.
-- Only an **admin** or the **seller who owns the product** can add, update,
-  delete, or reorder a product's images. Everyone else gets `403`.
+- A product has many images, each with a `url` and a server-managed `order`
+  (auto-appended; sending `order` on create/update returns `422`). Images sort
+  by `order` ascending; the smallest is the primary image.
+- Reorder via `PUT /products/<id>/images/reorder` with the exact set of active
+  image IDs in the desired order. Delete is a soft delete. Only an admin or the
+  owning seller may manage images.
 
 **Cart**
 
-- Each buyer has one active cart. It is created lazily the first time they add
-  an item, so there is no explicit "create cart" step.
-- A cart item stores only a `product_id` and a `quantity` — never a price or a
-  stock snapshot. Prices, subtotals, and totals are computed **live** from the
-  current product every time the cart is read. A price change or a stock change
-  is therefore reflected on the next read with no synchronization code.
-- **Availability is derived, not stored.** Each cart item is flagged
-  `available: false` (with an explanatory `note`) when its product is inactive
-  or when current stock is below the cart quantity. Because this is computed
-  from live product state, stock changes from *any* source — another buyer's
-  order, an order cancellation restoring stock, a seller editing stock — show up
-  automatically the next time the cart is fetched.
-- The cart is **grouped by seller** in the response: items are bucketed by the
-  product's `seller_id`, each group carrying its own item count, quantity, and
-  subtotal, alongside a cart-wide grand total. Items whose product has no owner
-  fall into an "Unknown seller" group.
-- **Adding** a product already in the cart accumulates its quantity. Stock is
-  validated on add and on update (setting quantity to `0` removes the line).
-- **Checkout (`POST /cart/checkout`)** converts the cart into an order by
-  reusing the same order-creation logic (stock re-validation and stock
-  deduction happen there), then removes **only the products that were ordered**
-  from the cart — not a blanket clear. An item that has gone unavailable aborts
-  the whole checkout (`409`) so the buyer can fix the cart first.
-- **Partial / per-seller checkout.** The checkout body optionally narrows what
-  is ordered: `seller_id` checks out just that seller's group, `cart_item_ids`
-  checks out a chosen set of lines, and no body checks out everything. The two
-  selectors are mutually exclusive. Whatever is ordered is removed from the
-  cart while the untouched items remain, so a buyer can pay one seller now and
-  the rest later. Each checkout still produces a single order.
-- **Direct orders and the cart are independent.** Placing an order through
-  `POST /orders` does not touch the cart; only the cart's own checkout removes
-  items. (If the same product sits in the cart, its availability simply updates
-  live as described above.)
+- One active cart per buyer, created lazily on first add. A cart item stores
+  only `product_id` + `quantity`; prices, subtotals, and availability are
+  computed live from the current product on every read.
+- The cart is grouped by seller with per-group and grand totals.
+- **Checkout** reuses order-creation logic, then removes only the ordered items.
+  An optional body narrows the scope: `seller_id` (one group) or `cart_item_ids`
+  (chosen lines) — mutually exclusive — plus an optional `address_id`. Each
+  checkout produces a single order.
+
+</details>
 
 ## Architecture
 
-Each domain (users, auth, categories, products, orders) is organized into layers:
+```mermaid
+flowchart LR
+    Req[Request] --> Route[Route<br/>flask-smorest]
+    Route --> Schema[Schema<br/>marshmallow]
+    Schema --> Service[Service<br/>business logic]
+    Service --> Repo[Repository<br/>data access]
+    Repo --> Model[Model<br/>SQLAlchemy]
+    Model --> DB[(PostgreSQL)]
+```
+
+Each domain (users, auth, categories, products, orders, cart) is split across
+these layers. Shared helpers live in `app/utils/` and cross-cutting constants in
+`app/validation.py`.
+
+<details>
+<summary>Project structure</summary>
 
 ```
-Request → Route (flask-smorest MethodView)
-        → Schema (marshmallow validation / serialization)
-        → Service (business logic, custom exceptions)
-        → Repository (data access)
-        → Model (SQLAlchemy)
+app/
+├── __init__.py        # application factory
+├── extensions.py      # db, jwt, migrate, api
+├── auth.py            # hashing, roles_required
+├── errors.py          # centralized error handlers
+├── validation.py      # shared status constants / transitions
+├── models/            # SQLAlchemy models
+├── schemas/           # marshmallow validation + serialization
+├── repositories/      # data access
+├── services/          # business logic
+├── routes/            # flask-smorest blueprints
+└── utils/             # http, auth_context, timezone, slug, text
+config/                # base / development / production
+migrations/            # Flask-Migrate (Alembic)
+seeders/               # database seeding
+tests/
+├── unit/              # isolated, repositories mocked
+└── integration/       # full HTTP-through-stack (in-memory SQLite)
+locust/                # load test (customer journey)
+docker/entrypoint.sh   # waits for DB, migrates, starts server
+Dockerfile · docker-compose.yml · docker-compose.prod.yml
+run.py · pytest.ini · requirements.txt
 ```
 
-## Project Structure
-
-```
-module-2/
-├── app/
-│   ├── __init__.py            # Application factory (create_app)
-│   ├── extensions.py          # db, jwt, migrate, api instances
-│   ├── auth.py                # password hashing, roles_required decorator
-│   ├── errors.py              # centralized HTTP + SQLAlchemy error handlers
-│   ├── validation.py          # shared constants (e.g. ACTIVE_ORDER_STATUSES)
-│   ├── models/                # SQLAlchemy models
-│   │   ├── users.py
-│   │   ├── categories.py
-│   │   ├── products.py
-│   │   ├── product_images.py
-│   │   ├── orders.py
-│   │   ├── carts.py
-│   │   ├── user_profiles.py
-│   │   └── user_addresses.py
-│   ├── schemas/               # marshmallow schemas (validation + serialization)
-│   │   ├── user_schema.py
-│   │   ├── user_profile_schema.py
-│   │   ├── user_address_schema.py
-│   │   ├── category_schema.py
-│   │   ├── product_schema.py
-│   │   ├── product_image_schema.py
-│   │   ├── order_schema.py
-│   │   └── cart_schema.py
-│   ├── repositories/          # data access layer
-│   │   ├── user_repository.py
-│   │   ├── user_profile_repository.py
-│   │   ├── user_address_repository.py
-│   │   ├── category_repository.py
-│   │   ├── product_repository.py
-│   │   ├── product_image_repository.py
-│   │   ├── order_repository.py
-│   │   └── cart_repository.py
-│   ├── services/              # business logic layer
-│   │   ├── auth_service.py
-│   │   ├── user_service.py
-│   │   ├── user_profile_service.py
-│   │   ├── user_address_service.py
-│   │   ├── category_service.py
-│   │   ├── product_service.py
-│   │   ├── product_image_service.py
-│   │   ├── order_service.py
-│   │   └── cart_service.py
-│   └── routes/                # flask-smorest blueprints (MethodView)
-│       ├── auth.py
-│       ├── users.py
-│       ├── user_profiles.py
-│       ├── user_addresses.py
-│       ├── categories.py
-│       ├── products.py
-│       ├── product_images.py
-│       ├── orders.py
-│       ├── carts.py
-│       └── health.py
-│   └── utils/                 # shared helpers
-│       ├── http.py            # make_response, paginate_meta (uniform response envelope)
-│       ├── auth_context.py    # current_user_id, current_role (JWT helpers)
-│       ├── text.py            # strip_or_none (schema input normalization)
-│       ├── timezone.py        # utcnow
-│       └── slug.py            # slugify
-├── config/                    # base / development / production configs
-├── migrations/                # Flask-Migrate (Alembic) migrations
-├── seeders/                   # database seeding (users, profiles, addresses, categories, products, orders)
-├── tests/
-│   ├── conftest.py            # shared fixtures (app, db, client, seeders)
-│   ├── unit/                  # fast, isolated tests (mocked repositories)
-│   │   ├── test_schemas.py
-│   │   ├── test_user_service.py
-│   │   ├── test_category_service.py
-│   │   ├── test_product_service.py
-│   │   ├── test_product_image_service.py
-│   │   ├── test_order_service.py
-│   │   ├── test_cart_service.py
-│   │   ├── test_user_profile_service.py
-│   │   └── test_user_address_service.py
-│   └── integration/           # full HTTP-through-stack tests
-│       ├── test_auth.py
-│       ├── test_users.py
-│       ├── test_profiles.py
-│       ├── test_addresses.py
-│       ├── test_categories.py
-│       ├── test_products.py
-│       ├── test_product_images.py
-│       ├── test_orders.py
-│       ├── test_order_address.py
-│       ├── test_cart.py
-│       └── test_health.py
-├── locust/
-│   └── locustfile.py          # performance / load test (customer journey)
-├── images/                    # diagrams and test-result evidence
-├── docker/
-│   └── entrypoint.sh          # waits for DB, runs migrations, starts server
-├── Dockerfile                 # app image (slim base, non-root, gunicorn default)
-├── docker-compose.yml         # development stack (Flask dev server, live reload)
-├── docker-compose.prod.yml    # production stack (gunicorn)
-├── .dockerignore
-├── run.py                     # application entry point
-├── pytest.ini                 # pytest configuration
-└── requirements.txt           # Python dependencies
-```
+</details>
 
 ## Database Schema
 
-| Table | Purpose |
-|-------|---------|
-| `users` | User accounts with authentication and roles |
-| `user_profiles` | One-to-one profile per user (full name, phone, avatar) |
-| `user_addresses` | Buyer shipping addresses (one-to-many, one default per user) |
-| `categories` | Product categories |
-| `products` | Product information |
-| `product_images` | Product images (one-to-many; `order` server-managed, auto-appended) |
-| `orders` | Customer orders (includes a `shipping_*` address snapshot copied at checkout and a `tracking_id` set when shipped) |
-| `order_items` | Line items within each order |
-| `carts` | One active shopping cart per buyer |
-| `cart_items` | Products a buyer intends to order (product + quantity) |
+`users`, `user_profiles`, `user_addresses`, `categories`, `products`,
+`product_images`, `orders` (with a `shipping_*` snapshot, `tracking_id`, and
+`deleted_at`), `order_items`, `carts`, `cart_items`.
 
-### Database Diagram
+![Schema Diagram](./images/diagram-4.png)
 
-![Schema Diagram](./images/diagram-3.png)
+## Running the Project Locally
 
-## Setup
+Pick one of the two paths below. Docker is the quickest start if you already
+have Docker installed; the manual path gives you a local Python + PostgreSQL
+setup.
 
-### 1. Install dependencies
+**Prerequisites**
+
+- Without Docker: Python 3.11+ and PostgreSQL 14+.
+- With Docker: Docker and Docker Compose.
+
+### Option A — Without Docker
+
+You provide the Python environment and a running PostgreSQL instance.
 
 ```bash
+# 1. Install dependencies
 pip3 install -r requirements.txt
-```
 
-### 2. PostgreSQL
-
-**macOS (Homebrew):**
-```bash
-brew install postgresql@18
-brew services start postgresql@18
-```
-
-**Create the database:**
-```bash
+# 2. Start PostgreSQL and create the database (macOS / Homebrew shown)
+brew install postgresql@18 && brew services start postgresql@18
 psql -U postgres -c "CREATE DATABASE revoshop_db;"
-```
 
-### 3. Configure environment
+# 3. Configure the environment
+cp .env.example .env
+# then set in .env:
+#   DATABASE_URL=postgresql://postgres:password@localhost:5432/revoshop_db
+#   JWT_SECRET_KEY=<any-long-random-string>
 
-Copy `.env.example` to `.env` and set the database URL:
-
-```bash
-DATABASE_URL=postgresql://postgres:password@localhost:5432/revoshop_db
-```
-
-### 4. Initialize the database
-
-```bash
+# 4. Apply migrations
 flask db upgrade
-```
 
-### 5. Seed test data (optional)
-
-```bash
+# 5. (Optional) seed sample users, products, and orders
 python3 -m seeders.seeders
-```
 
-## Running the App
-
-```bash
-# Uses FLASK_ENV (defaults to development)
+# 6. Run the API — FLASK_ENV defaults to development
 python3 run.py
-
-# Or with production config
-FLASK_ENV=production python3 run.py
 ```
 
-## Running with Docker
+The API is served at `http://127.0.0.1:5000`. Set `FLASK_ENV=production` to run
+with the production config.
 
-The project ships with a Docker setup for both development and production. A
-single `Dockerfile` builds the app image; two Compose files select the mode.
-Both bring up two services on a private bridge network (`revoshop-net`):
+### Option B — With Docker
 
-| Service | Image | Purpose |
-|---------|-------|---------|
-| `db` | `postgres:16-alpine` | PostgreSQL, data persisted in the named volume `pgdata` |
-| `web` | built from `Dockerfile` | The Flask API |
-
-On startup the `web` container waits for the database to be healthy, runs
-`flask db upgrade` automatically (via `docker/entrypoint.sh`), then launches the
-server. Migrations are applied for you; **seeding is never automatic** — run it
-manually when you want sample data.
-
-### 1. Configure environment
+A single `Dockerfile` builds the app image; two Compose files select the mode.
+Both start `db` (PostgreSQL) and `web` (the API) on a private network. On
+startup `web` waits for the database, runs `flask db upgrade` automatically,
+then serves. **Seeding is never automatic** — run it yourself when you want
+sample data.
 
 ```bash
+# 1. Configure the environment
 cp .env.docker.example .env
-```
+# Inside the Compose network the DB host is the service name `db`, not
+# localhost. Compose builds DATABASE_URL from the POSTGRES_* values, so you
+# usually only edit those and JWT_SECRET_KEY.
 
-Inside the Compose network the database host is the service name `db` (not
-`localhost`); Compose builds `DATABASE_URL` from the `POSTGRES_*` values, so you
-usually only edit those and `JWT_SECRET_KEY`.
+# 2a. Development — dev server with live reload, at http://localhost:5000
+docker compose up --build
 
-### Development
-
-Runs the Flask dev server with live reload (your source is bind-mounted into the
-container) and debug enabled.
-
-```bash
-docker compose up --build            # start (build on first run)
-docker compose logs -f web           # follow app logs
-docker compose down                  # stop (keeps the pgdata volume)
-```
-
-The API is published on `http://localhost:5000` (override with `WEB_PORT`, e.g.
-`WEB_PORT=8080 docker compose up` if port 5000 is taken).
-
-### Production
-
-Runs under gunicorn, with no source mount and `FLASK_ENV=production`. Required
-secrets (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `JWT_SECRET_KEY`)
-must be set in `.env` — the prod file fails fast if any is missing.
-
-```bash
+# 2b. Production — gunicorn, at http://localhost:8000 (DB port not published)
 docker compose -f docker-compose.prod.yml up --build -d
 ```
 
-The API is published on `http://localhost:8000` by default (override with
-`WEB_PORT`). The database port is **not** published to the host in production.
+Override the published port with `WEB_PORT` (e.g. `WEB_PORT=8080 docker compose
+up`).
 
-### Common tasks
+<details>
+<summary>Common Docker tasks</summary>
 
 ```bash
-# Seed sample data (run once the stack is up)
-docker compose exec web python -m seeders.seeders
-
-# Open a shell / run one-off commands in the app container
-docker compose exec web sh
-docker compose exec web flask db upgrade
-
-# Reset the database completely (drops the named volume)
-docker compose down -v
+docker compose exec web python -m seeders.seeders   # seed sample data
+docker compose exec web sh                           # shell into the app
+docker compose exec web flask db upgrade             # run migrations manually
+docker compose logs -f web                           # follow app logs
+docker compose down                                  # stop (keeps the pgdata volume)
+docker compose down -v                               # reset DB (drops the volume)
 ```
 
-### API Documentation (Postman)
+</details>
 
-A published Postman collection documents every endpoint with example requests,
-required headers, and sample request/response bodies. It also includes a login
-request whose access token can be reused across the other authenticated calls.
-Open it here:
+## API Documentation
 
-<a href="https://documenter.getpostman.com/view/17905565/2sBYAsyCVE#e32c17ab-a8f1-4f09-a5d4-feabb2e874f8" target="_blank" rel="noopener noreferrer">Revoshop Postman Collection</a>
-
-### API Documentation (Swagger UI)
-
-With the server running, open the flask-smorest Swagger UI:
-
-```
-http://127.0.0.1:5000/docs/swagger-ui
-```
+- **Postman:** [Revoshop Postman Collection](https://documenter.getpostman.com/view/17905565/2sBYAsyCVE#e32c17ab-a8f1-4f09-a5d4-feabb2e874f8)
+  — every endpoint with example requests and a reusable login token.
+- **Swagger UI:** `http://127.0.0.1:5000/docs/swagger-ui` (with the server running).
 
 ## Response Format
 
-All endpoints return a consistent JSON envelope. Every response includes a
-boolean `status` and a human-readable `message`.
-
-### Success
-
-`status` is `true`. Endpoints that return a resource include a `data` field;
-list endpoints add a `pagination` object; the login endpoint also returns tokens.
-
-Single resource:
+Every response has a boolean `status` and a `message`. Success responses add
+`data`; list endpoints add `pagination`; login adds tokens.
 
 ```json
-{
-  "status": true,
-  "message": "success get product",
-  "data": {
-    "id": 1,
-    "name": "Laptop Pro 15\"",
-    "price": 1299.99,
-    "stock": 15
-  }
-}
+{ "status": true, "message": "success get product", "data": { "id": 1, "name": "Laptop", "price": 1299.99 } }
 ```
-
-Paginated list:
 
 ```json
-{
-  "status": true,
-  "message": "get all products success",
-  "data": [ ... ],
-  "pagination": {
-    "page": 1,
-    "limit": 10,
-    "total_items": 42,
-    "total_pages": 5
-  }
-}
+{ "status": false, "message": "product not found" }
 ```
 
-Login (tokens are returned alongside the user data):
-
-```json
-{
-  "status": true,
-  "message": "login successful",
-  "access_token": "<jwt>",
-  "refresh_token": "<jwt>",
-  "data": { "id": 1, "username": "jane_smith", "email": "jane@example.com", "role": "buyer" }
-}
-```
-
-### Error
-
-`status` is `false` and `message` describes the problem. The HTTP status code
-carries the category of the error.
-
-```json
-{
-  "status": false,
-  "message": "product not found"
-}
-```
-
-| Status | When it occurs |
-|--------|----------------|
-| 400 | Bad request (e.g. deleting an order that cannot be cancelled) |
-| 401 | Missing or invalid authentication token, or wrong login credentials |
-| 403 | Authenticated but not allowed (wrong role, or not the resource owner) |
-| 404 | Resource not found |
-| 405 | HTTP method not allowed on the route |
-| 409 | Conflict (e.g. duplicate category name, username, or email) |
-| 422 | Validation error (invalid body/query) or insufficient stock |
-| 500 | Unexpected server error |
-| 503 | Database connection issue |
+| Status | When |
+|--------|------|
+| 400 | Bad request (e.g. illegal status transition) |
+| 401 | Missing/invalid token or wrong credentials |
+| 403 | Authenticated but not allowed (role or ownership) |
+| 404 | Not found |
+| 409 | Conflict (e.g. duplicate name, deleting the default address) |
+| 422 | Validation error or insufficient stock |
+| 500 / 503 | Server error / database unavailable |
 
 ## API Endpoints
 
-All endpoints are prefixed with `/api/v1`. Protected endpoints require a
-`Authorization: Bearer <access_token>` header.
+All routes are prefixed with `/api/v1`; protected routes need
+`Authorization: Bearer <access_token>`.
 
-### Health
-
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/api/v1/health` | Liveness + readiness check; verifies DB connectivity (`200` healthy, `503` if the database is down) | public |
-
-### Auth
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/v1/auth/login` | Log in, returns access + refresh tokens |
-| POST | `/api/v1/auth/refresh` | Get a new access token (refresh token required) |
-
-### Users
+<details>
+<summary>Health & Auth</summary>
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| POST | `/api/v1/users/` | Register a new user | public |
-| GET | `/api/v1/users/me` | Get current user | authenticated |
-| GET | `/api/v1/users/<id>` | Get user by ID | authenticated |
-| DELETE | `/api/v1/users/<id>` | Delete a user (own account or admin) | authenticated |
+| GET | `/health` | Liveness + DB readiness (`200` / `503`) | public |
+| POST | `/auth/login` | Log in, returns access + refresh tokens | public |
+| POST | `/auth/refresh` | New access token (refresh token required) | authenticated |
 
-### Profile
+</details>
 
-The current user's one-to-one profile. `PUT` upserts (creates on first call,
-updates afterwards).
-
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/api/v1/profile` | Get the current user's profile (`404` if not yet created) | buyer, seller, admin |
-| PUT | `/api/v1/profile` | Create or update the current user's profile | buyer, seller, admin |
-
-### Addresses
-
-A buyer's shipping address book. Exactly one address is the default at any time
-(enforced in the service layer).
+<details>
+<summary>Users, Profile & Addresses</summary>
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| GET | `/api/v1/addresses` | List the current buyer's addresses (default first) | buyer, admin |
-| POST | `/api/v1/addresses` | Add an address (first one becomes default; `is_default: true` promotes it) | buyer, admin |
-| GET | `/api/v1/addresses/<id>` | Get one address | buyer, admin |
-| PUT | `/api/v1/addresses/<id>` | Update an address (`is_default: true` promotes it to default) | buyer, admin |
-| DELETE | `/api/v1/addresses/<id>` | Soft-delete an address (`409` if it is the default and others exist) | buyer, admin |
-| PUT | `/api/v1/addresses/<id>/default` | Set this address as the default (unsets the previous one) | buyer, admin |
+| POST | `/users/` | Register a new user | public |
+| GET | `/users/me` | Current user | authenticated |
+| GET | `/users/<id>` | User by ID | authenticated |
+| DELETE | `/users/<id>` | Delete a user (own account or admin) | authenticated |
+| GET | `/profile` | Current user's profile (`404` if not created) | buyer, seller, admin |
+| PUT | `/profile` | Create or update the profile (upsert) | buyer, seller, admin |
+| GET | `/addresses` | List addresses (default first) | buyer, admin |
+| POST | `/addresses` | Add an address (first becomes default) | buyer, admin |
+| GET | `/addresses/<id>` | Get one address | buyer, admin |
+| PUT | `/addresses/<id>` | Update an address | buyer, admin |
+| DELETE | `/addresses/<id>` | Soft-delete (`409` if default and others exist) | buyer, admin |
+| PUT | `/addresses/<id>/default` | Set as default | buyer, admin |
 
-### Categories
+</details>
 
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/api/v1/categories/` | List categories (filter, sort, paginate) | any role |
-| GET | `/api/v1/categories/products` | List categories, each with its products (filter, sort, paginate) | any role |
-| POST | `/api/v1/categories/` | Create a category | seller, admin |
-| GET | `/api/v1/categories/<id>` | Get a category with its products | any role |
-| PUT | `/api/v1/categories/<id>` | Update a category | seller, admin |
-| DELETE | `/api/v1/categories/<id>` | Soft-delete a category | seller, admin |
-
-### Products
+<details>
+<summary>Categories, Products & Images</summary>
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| GET | `/api/v1/products/` | List products (filter, sort, paginate) | any role |
-| POST | `/api/v1/products/` | Create a product (owned by the creating seller/admin) | seller, admin |
-| GET | `/api/v1/products/<id>` | Get a product by id (detail includes `seller_id`, `slug`) | any role |
-| GET | `/api/v1/products/slug/<slug>` | Get a product by its slug | any role |
-| PUT | `/api/v1/products/<id>` | Update a product | seller, admin |
-| DELETE | `/api/v1/products/<id>` | Soft-delete a product | seller, admin |
+| GET | `/categories/` | List categories | any role |
+| GET | `/categories/products` | Categories with their products | any role |
+| POST | `/categories/` | Create a category | seller, admin |
+| GET | `/categories/<id>` | Category with products | any role |
+| PUT | `/categories/<id>` | Update a category | seller, admin |
+| DELETE | `/categories/<id>` | Soft-delete a category | seller, admin |
+| GET | `/products/` | List products (filter, sort, paginate) | any role |
+| POST | `/products/` | Create a product | seller, admin |
+| GET | `/products/<id>` | Product by ID | any role |
+| GET | `/products/slug/<slug>` | Product by slug | any role |
+| PUT | `/products/<id>` | Update a product | seller, admin |
+| DELETE | `/products/<id>` | Soft-delete a product | seller, admin |
+| GET | `/products/<id>/images/` | List active images (ordered) | any role |
+| POST | `/products/<id>/images/` | Add an image (auto-appended) | admin, owning seller |
+| PUT | `/products/<id>/images/<id>` | Update an image (`url` only) | admin, owning seller |
+| PUT | `/products/<id>/images/reorder` | Reorder active images | admin, owning seller |
+| DELETE | `/products/<id>/images/<id>` | Soft-delete an image | admin, owning seller |
 
-### Product Images
+</details>
 
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/api/v1/products/<product_id>/images/` | List a product's active images (ordered by `order` asc) | any role |
-| POST | `/api/v1/products/<product_id>/images/` | Add an image (auto-appended to the end; `order` not accepted) | admin, owning seller |
-| PUT | `/api/v1/products/<product_id>/images/<id>` | Update an image (`url` only) | admin, owning seller |
-| PUT | `/api/v1/products/<product_id>/images/reorder` | Reorder all active images (`image_ids` in desired order) | admin, owning seller |
-| DELETE | `/api/v1/products/<product_id>/images/<id>` | Soft-delete an image | admin, owning seller |
-
-### Orders
-
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| GET | `/api/v1/orders/` | List orders (buyer: own; seller: containing their products; admin: all) | any role |
-| POST | `/api/v1/orders/` | Create an order (optional `address_id`, else default; checks stock, deducts inventory) | buyer |
-| GET | `/api/v1/orders/<id>` | Get an order (buyer owner, seller of a product in it, or admin) | any role |
-| PUT | `/api/v1/orders/<id>` | Advance order status one step (`processing → shipped` requires a `tracking_id`; seller scoped to own products; cannot cancel here) | seller, admin |
-| PUT | `/api/v1/orders/<id>/address` | Re-set the shipping address (owner only; only while `waiting_for_payment`, else `409`) | buyer |
-| DELETE | `/api/v1/orders/<id>` | Cancel an order: restores stock, soft-deletes, records `updated_by` | buyer, seller, admin |
-
-**Order status transitions:**
-
-```
-waiting_for_payment → processing → shipped → delivered     (PUT: forward only)
-        │                  │
-        └──────────────────┴──────────────→ cancelled      (DELETE: cancel + restore stock)
-```
-
-`cancelled` and `delivered` are terminal. Cancelling is only allowed before an
-order ships.
-
-### Cart
+<details>
+<summary>Orders & Cart</summary>
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| GET | `/api/v1/cart` | Get the current buyer's cart, grouped by seller with live totals | buyer |
-| POST | `/api/v1/cart/items` | Add a product (accumulates quantity if already present) | buyer |
-| PUT | `/api/v1/cart/items/<id>` | Set an item's quantity (`0` removes it) | buyer |
-| DELETE | `/api/v1/cart/items/<id>` | Remove a single item | buyer |
-| DELETE | `/api/v1/cart` | Clear the whole cart | buyer |
-| POST | `/api/v1/cart/checkout` | Convert the cart into an order and remove the ordered items. Optional body selects a subset and an `address_id` (see below) | buyer |
+| GET | `/orders/` | List orders (scoped by role) | any role |
+| POST | `/orders/` | Create an order (optional `address_id`; checks/deducts stock) | buyer |
+| GET | `/orders/<id>` | Get an order (owner, seller of a product in it, or admin) | any role |
+| PUT | `/orders/<id>` | Change status: advance, cancel, or return (`shipped` needs `tracking_id`) | buyer, seller, admin |
+| PUT | `/orders/<id>/address` | Re-snapshot the shipping address (owner; only while `waiting_for_payment`) | buyer |
+| DELETE | `/orders/<id>` | Soft-delete (no status change / restock; only when not in flight) | buyer, seller, admin |
+| GET | `/cart` | Current cart, grouped by seller with live totals | buyer |
+| POST | `/cart/items` | Add a product (accumulates quantity) | buyer |
+| PUT | `/cart/items/<id>` | Set quantity (`0` removes it) | buyer |
+| DELETE | `/cart/items/<id>` | Remove one item | buyer |
+| DELETE | `/cart` | Clear the cart | buyer |
+| POST | `/cart/checkout` | Convert cart to an order; optional subset + `address_id` | buyer |
 
-**Checkout selection (optional JSON body):**
+Checkout body: none = whole cart · `{ "seller_id": 10 }` = one seller ·
+`{ "cart_item_ids": [5, 8] }` = chosen lines (the two selectors are mutually
+exclusive).
 
-| Body | Effect |
-|------|--------|
-| _(none)_ | Check out the whole cart |
-| `{ "seller_id": 10 }` | Check out only that seller's items (per-seller checkout) |
-| `{ "cart_item_ids": [5, 8] }` | Check out only those cart items (partial checkout) |
-
-`seller_id` and `cart_item_ids` are mutually exclusive (sending both returns
-`422`). A `seller_id` with no matching items, or an unknown cart item id,
-returns `404`. Only the checked-out items are removed from the cart; the rest
-stay. Selection still produces a single order.
-
-An optional `address_id` can be combined with any of the above to ship to a
-specific saved address; if omitted, the buyer's default address is used. The
-resolved address is snapshotted onto the order.
+</details>
 
 ## Testing
 
-Tests are split into fast unit tests (isolated, repositories mocked) and
-integration tests (full HTTP stack against an in-memory SQLite database).
+Fast unit tests (repositories mocked) and integration tests (full HTTP stack on
+in-memory SQLite).
 
 ```bash
-# Run everything (unit + integration)
-python3 -m pytest
-
-# Only unit tests (fast)
-python3 -m pytest tests/unit/
-
-# Only integration tests
-python3 -m pytest tests/integration/
-
-# A single file, class, or test
-python3 -m pytest tests/unit/test_order_service.py
-python3 -m pytest tests/unit/test_order_service.py::TestDelete
-python3 -m pytest tests/integration/test_orders.py::TestCreateOrder::test_create_order_success
-
-# Filter by keyword
+python3 -m pytest                       # everything
+python3 -m pytest tests/unit/           # unit only
+python3 -m pytest tests/integration/    # integration only
 python3 -m pytest -k "refund or insufficient"
-```
 
-> Tip: the development config enables `SQLALCHEMY_ECHO`, which prints every SQL
-> statement during integration tests. Add `--log-level=WARNING` to quiet it.
-
-### Coverage
-
-```bash
-# Terminal report with missing lines
+# Coverage
 python3 -m pytest --cov=app --cov-report=term-missing
-
-# HTML report (open htmlcov/index.html afterwards)
-python3 -m pytest --cov=app --cov-report=html
+python3 -m pytest --cov=app --cov-report=html   # open htmlcov/index.html
 ```
-
-### Test Result
-
-Full suite passing with a coverage report:
 
 ![Pytest Result](./images/tests/v2/pytest-20260829.png)
 
 ## Performance Testing (Locust)
 
-A Locust load test in `locust/locustfile.py` simulates a realistic customer
-journey with weighted tasks: browsing the catalog, viewing product details,
-placing multi-product orders, and verifying the placed order. Each simulated
-user logs in once, then repeats the journey.
-
-### 1. Start the API and seed data
+`locust/locustfile.py` simulates a customer journey (browse → view → order →
+verify) with weighted tasks. Each user logs in once, then repeats.
 
 ```bash
-python3 -m seeders.seeders   # seed users, products, and orders
-python3 run.py               # start the API (default: http://127.0.0.1:5000)
-```
+python3 -m seeders.seeders && python3 run.py
 
-### 2. Run Locust
-
-```bash
 # Web UI at http://127.0.0.1:8089
 locust -f locust/locustfile.py --host http://127.0.0.1:5000
 
-# Headless: 10 users, spawn 2/s, run for 1 minute
+# Headless: 10 users, 2/s, 1 minute
 locust -f locust/locustfile.py --host http://127.0.0.1:5000 \
     --users 10 --spawn-rate 2 --run-time 1m --headless
 ```
 
-The test logs in as the seeded buyer (`jane@example.com`). Override the
-credentials with the `LOCUST_EMAIL` and `LOCUST_PASSWORD` environment variables.
-
-
-### Test Result
+Logs in as the seeded buyer (`jane@example.com`); override with `LOCUST_EMAIL` /
+`LOCUST_PASSWORD`.
 
 ![Locust Result](./images/tests/v2/locust-20260829.png)
 
 ## Code Quality & Security
 
-Three tools help keep the code clean and dependencies safe. They are configured
-pragmatically (`.pylintrc` disables checks that do not apply to this codebase).
-
 ```bash
-# Static security scan of the application code
-bandit -r app
-
-# Lint / code-quality report (uses .pylintrc)
-pylint --rcfile=.pylintrc app
-
-# Audit installed dependencies for known vulnerabilities
-pip-audit
-pip-audit -r requirements.txt
+bandit -r app                   # security scan
+pylint --rcfile=.pylintrc app   # lint
+pip-audit                       # dependency CVE audit
 ```
 
-| Tool | Checks | Latest result |
-|------|--------|---------------|
+| Tool | Checks | Latest |
+|------|--------|--------|
 | Bandit | Security issues in our code | 0 issues |
-| pip-audit | Known CVEs in dependencies | No known vulnerabilities |
+| pip-audit | Known CVEs in dependencies | None |
 | Pylint | Code quality / style | 9.66 / 10 |
 
 ## Logging
 
-The app configures logging on startup (`app/logging_config.py`). Logs go to both
-the console and a file at `logs/app.log`. The file rotates daily at midnight,
-keeping the last 30 days (older files are named `app.log.YYYY-MM-DD`). The
-`logs/` directory is git-ignored.
-
-The log level follows the environment (`DEBUG` in development, `INFO` in
-production) and can be overridden with environment variables:
-
-```bash
-LOG_LEVEL=WARNING      # console/file log level
-LOG_TO_FILE=false      # disable file logging (console only)
-LOG_DIR=logs           # directory for log files
-LOG_FILE=app.log       # log file name
-LOG_BACKUP_COUNT=30    # days of rotated logs to keep
-```
-
-Key events are logged, including application startup, login success/failure, and
-order placement/cancellation.
+Logging is configured on startup (`app/logging_config.py`): console + a daily
+rotating file at `logs/app.log` (30 days kept, git-ignored). Level follows the
+environment (`DEBUG` dev, `INFO` prod). Override with `LOG_LEVEL`, `LOG_TO_FILE`,
+`LOG_DIR`, `LOG_FILE`, `LOG_BACKUP_COUNT`. Startup, login, and order events are
+logged.
 
 ## Future Improvements
 
-- **Concurrency-safe stock deduction.** Order creation currently reads a
-  product's stock, checks it against the requested quantity, and writes the
-  reduced value (a read-modify-write with no row lock). Under simultaneous
-  checkouts two requests can both read the same stock, both pass the check, and
-  both deduct — an oversell. The fix is to make the deduction atomic, either by
-  locking the product rows during order creation (`SELECT ... FOR UPDATE` via
-  SQLAlchemy's `with_for_update()`) or with a conditional update
-  (`UPDATE products SET stock = stock - :qty WHERE id = :id AND stock >= :qty`)
-  and treating a zero-row result as insufficient stock. This is independent of
-  the cart, whose availability is already derived from live stock. Deferred for
-  a later iteration.
+- **Concurrency-safe stock deduction.** Order creation currently does a
+  read-modify-write on stock without a row lock, so simultaneous checkouts can
+  oversell. The fix is to make the deduction atomic — lock the product rows
+  (`SELECT ... FOR UPDATE` / `with_for_update()`) or use a conditional
+  `UPDATE ... WHERE stock >= :qty` and treat a zero-row result as insufficient
+  stock.
 
 ## Troubleshooting
 
-**Database connection error:**
-- Verify PostgreSQL is running: `brew services list`
-- Check `DATABASE_URL` in `.env`
-- Ensure the database exists: `psql -l`
-
-**Module not found errors:**
-```bash
-pip3 install -r requirements.txt
-```
+- **Database connection error:** confirm Postgres is running
+  (`brew services list`), check `DATABASE_URL` in `.env`, and that the database
+  exists (`psql -l`).
+- **Module not found:** `pip3 install -r requirements.txt`.
