@@ -4,6 +4,47 @@ An e-commerce backend API built with Flask. It demonstrates a layered
 architecture (routes → services → repositories), JWT auth, and role-based
 access control.
 
+## Live Demo
+
+The API is deployed and publicly reachable:
+
+**Base URL:** <https://revoshop-apis.onrender.com/>
+
+- Health check: <https://revoshop-apis.onrender.com/api/v1/health>
+- Swagger UI: <https://revoshop-apis.onrender.com/docs/swagger-ui>
+
+> Hosted on Render's free tier, so the first request after a period of
+> inactivity may take a few seconds while the instance wakes up.
+
+### Try it with demo accounts
+
+The deployment is seeded with the accounts below. Log in via
+`POST /api/v1/auth/login` to get a token, then send it as
+`Authorization: Bearer <access_token>` on protected routes. All demo accounts
+share the password **`password123`**.
+
+| Role | Email | Password |
+|------|-------|----------|
+| admin | `john@example.com` | `password123` |
+| buyer | `jane@example.com` | `password123` |
+| buyer | `bob@example.com` | `password123` |
+| seller | `alice@example.com` | `password123` |
+| seller | `charlie@example.com` | `password123` |
+
+```bash
+# Log in and grab a token
+curl -X POST https://revoshop-apis.onrender.com/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "jane@example.com", "password": "password123"}'
+
+# Use the returned access_token on a protected route
+curl https://revoshop-apis.onrender.com/api/v1/orders/ \
+  -H "Authorization: Bearer <access_token>"
+```
+
+> These are shared public demo credentials — please don't store anything
+> sensitive. The data may be reset at any time.
+
 ## Overview
 
 Revoshop is a marketplace backend where **buyers** shop and place orders,
@@ -292,7 +333,8 @@ docker compose down -v                               # reset DB (drops the volum
 
 - **Postman:** [Revoshop Postman Collection](https://documenter.getpostman.com/view/17905565/2sBYAsyCVE#e32c17ab-a8f1-4f09-a5d4-feabb2e874f8)
   — every endpoint with example requests and a reusable login token.
-- **Swagger UI:** `http://127.0.0.1:5000/docs/swagger-ui` (with the server running).
+- **Swagger UI:** [live](https://revoshop-apis.onrender.com/docs/swagger-ui), or
+  `http://127.0.0.1:5000/docs/swagger-ui` when running locally.
 
 ## Response Format
 
