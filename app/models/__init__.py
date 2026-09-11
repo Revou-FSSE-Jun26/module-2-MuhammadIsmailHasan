@@ -6,8 +6,10 @@ from app.models.product_images import ProductImage
 from app.models.carts import Cart, CartItem
 from app.models.user_profiles import UserProfile
 from app.models.user_addresses import UserAddress
+from app.models.payments import Payment
 
 __all__ = [
     'User', 'Product', 'Category', 'Order', 'OrderItem',
     'ProductImage', 'Cart', 'CartItem', 'UserProfile', 'UserAddress',
+    'Payment',
 ]

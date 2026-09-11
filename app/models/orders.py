@@ -37,6 +37,7 @@ class Order(db.Model):
 
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
     updated_by_user = db.relationship('User', foreign_keys=[updated_by], lazy=True)
+    payments = db.relationship('Payment', back_populates='order', lazy='selectin')
 
     def to_dict(self):
         return {
@@ -60,6 +61,7 @@ class Order(db.Model):
         result['is_active'] = self.is_active
         result['deleted_at'] = self.deleted_at.isoformat() if self.deleted_at else None
         result['items'] = [item.to_dict() for item in self.items]
+        result['payments'] = [payment.to_dict() for payment in self.payments]
         return result
 
 

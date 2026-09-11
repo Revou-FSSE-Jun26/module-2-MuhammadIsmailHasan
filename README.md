@@ -74,6 +74,11 @@ Docker setup for both development and production.
 - **Orders** — buyer checkout with server-side pricing and stock deduction, a
   full status lifecycle (payment → fulfillment → delivery, plus cancel/return
   with restock and refund notes), a shipping-address snapshot, and soft delete.
+- **Payments (Midtrans)** — buyer starts a payment, the API creates a Midtrans
+  Snap transaction and returns the payment page URL, and a signature-verified
+  webhook updates the payment and order when the status changes. One order can
+  have many payment attempts, so a failed attempt lets the buyer retry without
+  losing the order.
 - **Shopping cart** — one lazy cart per buyer, grouped by seller, with
   live-computed totals and availability, plus whole / per-seller / partial
   checkout.
@@ -135,6 +140,47 @@ stateDiagram-v2
   allowed only once an order is no longer in flight (`delivered`, `returned`,
   `cancelled`). To cancel, use `PUT`.
 - **Audit.** Every status change records the acting user in `updated_by`.
+
+## Payments (Midtrans)
+
+Payment uses Midtrans Snap. The buyer picks their method on the Midtrans page,
+not in this API. An order is linked to many payment attempts, so a failed
+attempt does not kill the order.
+
+```mermaid
+sequenceDiagram
+    participant Buyer
+    participant API
+    participant Midtrans
+    Buyer->>API: POST /payments { order_id }
+    API->>Midtrans: create Snap transaction (our payment_reference as order_id)
+    Midtrans-->>API: token + redirect_url
+    API-->>Buyer: redirect_url
+    Buyer->>Midtrans: pay on the Snap page
+    Midtrans->>API: webhook (transaction_status)
+    API->>API: verify signature, update payment + order
+```
+
+- **Start a payment — `POST /payments`.** Only the owning buyer, and only while
+  the order is `waiting_for_payment`. Creates a `pending` payment attempt with a
+  unique reference (`order-<id>-<attempt>`) and returns Midtrans's `snap_token`
+  and `redirect_url`.
+- **Webhook — `POST /payments/webhook/midtrans`.** Public (no login); trust is
+  established by verifying Midtrans's SHA512 signature. Idempotent — duplicate
+  notifications are ignored, and it always answers `200` so Midtrans stops
+  retrying.
+- **Safe against out-of-order webhooks.** A `paid` payment is never regressed by
+  a late `deny`/`expire` notification — once paid, only a `refund` may change it;
+  a `refunded` payment is fully terminal. This protects the correct final state
+  when notifications arrive late, duplicated, or out of order.
+- **Status reactions.** A `settlement` moves the order to `paid`. An `expire`
+  cancels the order and restocks. A `refund` cancels a paid order and restocks.
+- **Failure and retry.** A denied or cancelled *attempt* is marked `failed` but
+  the *order stays* `waiting_for_payment`, so the buyer can call `POST /payments`
+  again to create a fresh attempt. Only an expired payment link cancels the
+  order.
+
+See `docs/payment-testing-guide.md` for a full local setup and test walkthrough.
 
 <details>
 <summary>Full business rules (users, products, orders, cart, images)</summary>
@@ -244,9 +290,10 @@ run.py · pytest.ini · requirements.txt
 
 `users`, `user_profiles`, `user_addresses`, `categories`, `products`,
 `product_images`, `orders` (with a `shipping_*` snapshot, `tracking_id`, and
-`deleted_at`), `order_items`, `carts`, `cart_items`.
+`deleted_at`), `order_items`, `carts`, `cart_items`, `payments` (one order to
+many attempts, referencing `orders`).
 
-![Schema Diagram](./images/diagram-4.png)
+![Schema Diagram](./images/diagram-6.png)
 
 ## Running the Project Locally
 
@@ -441,6 +488,16 @@ All routes are prefixed with `/api/v1`; protected routes need
 Checkout body: none = whole cart · `{ "seller_id": 10 }` = one seller ·
 `{ "cart_item_ids": [5, 8] }` = chosen lines (the two selectors are mutually
 exclusive).
+
+</details>
+
+<details>
+<summary>Payments</summary>
+
+| Method | Endpoint | Description | Access |
+|--------|----------|-------------|--------|
+| POST | `/payments/` | Start a payment for an order; returns `snap_token` + `redirect_url` | buyer |
+| POST | `/payments/webhook/midtrans` | Midtrans status notification (signature-verified) | public |
 
 </details>
 

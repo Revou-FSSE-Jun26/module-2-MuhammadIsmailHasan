@@ -27,6 +27,12 @@ class BaseConfig:
     OPENAPI_SWAGGER_UI_PATH = '/swagger-ui'
     OPENAPI_SWAGGER_UI_URL = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist/'
 
+    # ─── Midtrans (payment gateway) ───────────────────────────────────────────
+    MIDTRANS_SERVER_KEY = os.getenv('MIDTRANS_SERVER_KEY', '')
+    MIDTRANS_CLIENT_KEY = os.getenv('MIDTRANS_CLIENT_KEY', '')
+    MIDTRANS_IS_PRODUCTION = os.getenv('MIDTRANS_IS_PRODUCTION', 'false').lower() == 'true'
+    MIDTRANS_EXPIRY_MINUTES = int(os.getenv('MIDTRANS_EXPIRY_MINUTES', '1440'))
+
     # ─── Logging ──────────────────────────────────────────────────────────────
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_TO_FILE = os.getenv('LOG_TO_FILE', 'true').lower() == 'true'

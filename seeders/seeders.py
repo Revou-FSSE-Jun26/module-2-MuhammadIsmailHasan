@@ -7,7 +7,7 @@ from app import create_app
 from app.extensions import db
 from app.models import (
     User, Product, Category, Order, OrderItem, ProductImage, Cart, CartItem,
-    UserProfile, UserAddress
+    UserProfile, UserAddress, Payment
 )
 from app.utils.slug import slugify
 import bcrypt
@@ -23,6 +23,7 @@ def clear_tables():
     try:
         db.session.query(CartItem).delete()
         db.session.query(Cart).delete()
+        db.session.query(Payment).delete()
         db.session.query(OrderItem).delete()
         db.session.query(Order).delete()
         db.session.query(ProductImage).delete()
@@ -136,81 +137,81 @@ def seed_products():
         {
             'category_id': electronics_cat.id if electronics_cat else None,
             'seller_id': alice_id,
-            'name': 'Laptop Pro 15"',
-            'description': 'High-performance laptop with 16GB RAM and 512GB SSD',
-            'price': 1299.99,
+            'name': 'Laptop ASUS Vivobook 14',
+            'description': 'Laptop ringan dengan RAM 16GB dan SSD 512GB',
+            'price': 8499000,
             'stock': 15
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
             'seller_id': alice_id,
-            'name': 'Wireless Mouse',
-            'description': 'Ergonomic wireless mouse with long battery life',
-            'price': 29.99,
+            'name': 'Mouse Wireless Logitech',
+            'description': 'Mouse wireless ergonomis dengan baterai tahan lama',
+            'price': 185000,
             'stock': 50
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
             'seller_id': alice_id,
-            'name': 'USB-C Cable',
-            'description': '2-meter USB-C charging and data cable',
-            'price': 9.99,
+            'name': 'Kabel USB-C 2 Meter',
+            'description': 'Kabel USB-C untuk charging dan transfer data',
+            'price': 45000,
             'stock': 100
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
             'seller_id': alice_id,
-            'name': 'Monitor 4K 27"',
-            'description': '4K IPS monitor with USB-C connectivity',
-            'price': 599.99,
+            'name': 'Monitor LG 27 Inch 4K',
+            'description': 'Monitor IPS 4K dengan konektivitas USB-C',
+            'price': 3750000,
             'stock': 10
         },
         {
             'category_id': electronics_cat.id if electronics_cat else None,
             'seller_id': alice_id,
-            'name': 'Mechanical Keyboard',
-            'description': 'RGB mechanical keyboard with switches',
-            'price': 149.99,
+            'name': 'Keyboard Mekanik RGB',
+            'description': 'Keyboard mekanik dengan lampu RGB dan blue switch',
+            'price': 649000,
             'stock': 25
         },
         {
             'category_id': clothing_cat.id if clothing_cat else None,
             'seller_id': charlie_id,
-            'name': 'Cotton T-Shirt',
-            'description': '100% cotton casual t-shirt, available in multiple colors',
-            'price': 19.99,
+            'name': 'Kaos Katun Combed 30s',
+            'description': 'Kaos katun combed 30s, tersedia berbagai warna',
+            'price': 75000,
             'stock': 75
         },
         {
             'category_id': clothing_cat.id if clothing_cat else None,
             'seller_id': charlie_id,
-            'name': 'Denim Jeans',
-            'description': 'Classic blue denim jeans with comfortable fit',
-            'price': 49.99,
+            'name': 'Celana Jeans Denim',
+            'description': 'Celana jeans denim klasik dengan potongan nyaman',
+            'price': 249000,
             'stock': 40
         },
         {
             'category_id': clothing_cat.id if clothing_cat else None,
             'seller_id': charlie_id,
-            'name': 'Hoodie',
-            'description': 'Warm fleece hoodie, perfect for winter',
-            'price': 59.99,
+            'name': 'Jaket Hoodie Fleece',
+            'description': 'Jaket hoodie bahan fleece, hangat dan nyaman',
+            'price': 189000,
             'stock': 30
         },
         {
             'category_id': food_cat.id if food_cat else None,
             'seller_id': charlie_id,
-            'name': 'Organic Coffee Beans',
-            'description': 'Premium arabica coffee beans, 1kg pack',
-            'price': 15.99,
+            'name': 'Kopi Arabika Gayo 1kg',
+            'description': 'Biji kopi arabika Gayo premium, kemasan 1kg',
+            'price': 135000,
             'stock': 60
         },
         {
             'category_id': food_cat.id if food_cat else None,
             'seller_id': charlie_id,
-            'name': 'Green Tea',
-            'description': 'Organic green tea, 50 tea bags',
-            'price': 8.99,
+            'name': 'Teh Hijau Celup 50 Kantong',
+            'description': 'Teh hijau organik, isi 50 kantong celup',
+            'price': 28000,
             'stock': 80
         },
     ]

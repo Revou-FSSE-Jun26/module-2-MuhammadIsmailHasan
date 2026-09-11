@@ -23,3 +23,24 @@ UNDELETABLE_STATUSES = ('waiting_for_payment', 'paid', 'processing', 'shipped')
 TERMINAL_STATUSES = ('cancelled', 'returned')
 
 ACTIVE_ORDER_STATUSES = ('waiting_for_payment', 'paid', 'processing', 'shipped')
+
+
+PAYMENT_STATUSES = ('pending', 'paid', 'expired', 'failed', 'refunded')
+
+MIDTRANS_STATUS_TO_PAYMENT_STATUS = {
+    'settlement': 'paid',
+    'pending': 'pending',
+    'authorize': 'pending',
+    'expire': 'expired',
+    'cancel': 'failed',
+    'deny': 'failed',
+    'failure': 'failed',
+    'refund': 'refunded',
+    'partial_refund': 'refunded',
+}
+
+PAYMENT_STATUS_TO_ORDER_STATUS = {
+    'paid': 'paid',
+    'expired': 'cancelled',
+    'refunded': 'cancelled',
+}
