@@ -218,6 +218,31 @@ class TestCreatePayment:
                 PaymentService.create_payment(order_id=1, user_id=1)
 
 
+class TestGetById:
+
+    def test_owner_can_get(self, payment_repo, order_repo):
+        payment_repo.get_by_id.return_value = make_payment(order_id=5)
+        order_repo.get_by_id.return_value = make_order(id=5, user_id=1)
+        result = PaymentService.get_by_id(1, user_id=1, role='buyer')
+        assert result.order_id == 5
+
+    def test_admin_can_get_any(self, payment_repo, order_repo):
+        payment_repo.get_by_id.return_value = make_payment(order_id=5)
+        result = PaymentService.get_by_id(1, user_id=999, role='admin')
+        assert result.order_id == 5
+
+    def test_not_found_raises(self, payment_repo, order_repo):
+        payment_repo.get_by_id.return_value = None
+        with pytest.raises(PaymentNotFoundError):
+            PaymentService.get_by_id(1, user_id=1, role='buyer')
+
+    def test_non_owner_forbidden(self, payment_repo, order_repo):
+        payment_repo.get_by_id.return_value = make_payment(order_id=5)
+        order_repo.get_by_id.return_value = make_order(id=5, user_id=2)
+        with pytest.raises(OrderPermissionError):
+            PaymentService.get_by_id(1, user_id=1, role='buyer')
+
+
 class TestHandleNotification:
 
     def test_bad_signature_raises(self, app_ctx, payment_repo, order_repo, db_session):

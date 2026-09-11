@@ -17,7 +17,7 @@ from app.services.payment_service import (
     PaymentGatewayError,
 )
 from app.auth import roles_required
-from app.utils.auth_context import current_user_id
+from app.utils.auth_context import current_user_id, current_role
 from app.utils.http import make_response
 
 payments_blp = Blueprint(
@@ -54,6 +54,26 @@ class PaymentCreate(MethodView):
         data['redirect_url'] = snap['redirect_url']
 
         return make_response('payment created', data, 201)
+
+
+@payments_blp.route('/<int:payment_id>')
+class PaymentDetail(MethodView):
+
+    @roles_required('buyer', 'admin')
+    def get(self, payment_id):
+        try:
+            payment = PaymentService.get_by_id(
+                payment_id, user_id=current_user_id(), role=current_role()
+            )
+        except PaymentNotFoundError as e:
+            abort(404, message=str(e))
+        except OrderPermissionError as e:
+            abort(403, message=str(e))
+
+        return make_response(
+            'success get payment',
+            PaymentResponseSchema().dump(payment),
+        )
 
 
 @payments_blp.route('/webhook/midtrans')

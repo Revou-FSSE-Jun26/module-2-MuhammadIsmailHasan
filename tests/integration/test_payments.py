@@ -185,3 +185,52 @@ class TestWebhook:
         assert order.status == 'paid'
         payment = Payment.query.filter_by(payment_reference=reference).first()
         assert payment.status == 'paid'
+
+
+class TestGetPayment:
+
+    def _create_payment(self, client, seed_order):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        with patch('app.services.payment_service.create_snap_transaction') as gw:
+            gw.return_value = {'token': 't', 'redirect_url': 'https://snap/t'}
+            resp = client.post('/api/v1/payments/', json={
+                'order_id': seed_order.id,
+            }, headers=auth_header(token))
+        return resp.get_json()['data']['id']
+
+    def test_get_payment_success(self, client, seed_order):
+        payment_id = self._create_payment(client, seed_order)
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get(
+            f'/api/v1/payments/{payment_id}',
+            headers=auth_header(token),
+        )
+
+        data = response.get_json()
+        assert response.status_code == 200
+        assert data['data']['id'] == payment_id
+        assert data['data']['status'] == 'pending'
+
+    def test_get_payment_not_found(self, client, seed_users):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        response = client.get('/api/v1/payments/99999', headers=auth_header(token))
+        assert response.status_code == 404
+
+    def test_get_payment_seller_forbidden(self, client, seed_order):
+        payment_id = self._create_payment(client, seed_order)
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+        response = client.get(
+            f'/api/v1/payments/{payment_id}',
+            headers=auth_header(token),
+        )
+        assert response.status_code == 403
+
+    def test_get_payment_admin_allowed(self, client, seed_order):
+        payment_id = self._create_payment(client, seed_order)
+        token = get_auth_token(client, 'admin@test.com', 'password123')
+        response = client.get(
+            f'/api/v1/payments/{payment_id}',
+            headers=auth_header(token),
+        )
+        assert response.status_code == 200

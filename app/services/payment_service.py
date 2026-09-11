@@ -117,6 +117,23 @@ class PaymentService:
         return payment, snap
 
     @staticmethod
+    def get_by_id(payment_id, user_id, role):
+        payment = PaymentRepository.get_by_id(payment_id)
+        if not payment:
+            raise PaymentNotFoundError("payment not found")
+
+        if role == 'admin':
+            return payment
+
+        order = OrderRepository.get_by_id(payment.order_id)
+        if not order or order.user_id != user_id:
+            raise OrderPermissionError(
+                "you don't have permission to view this payment"
+            )
+
+        return payment
+
+    @staticmethod
     def verify_signature(order_id, status_code, gross_amount, signature_key):
         server_key = current_app.config.get('MIDTRANS_SERVER_KEY', '')
 
