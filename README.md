@@ -378,7 +378,7 @@ docker compose down -v                               # reset DB (drops the volum
 
 ## API Documentation
 
-- **Postman:** [Revoshop Postman Collection](https://documenter.getpostman.com/view/17905565/2sBYAvwWTW)
+- **Postman:** [Revoshop Postman Collection](https://documenter.getpostman.com/view/17905565/2sBYAysoh1)
   — every endpoint with example requests and a reusable login token.
 - **Swagger UI:** [live](https://revoshop-apis.onrender.com/docs/swagger-ui), or
   `http://127.0.0.1:5000/docs/swagger-ui` when running locally.
