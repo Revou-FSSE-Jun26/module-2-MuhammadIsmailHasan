@@ -497,6 +497,7 @@ exclusive).
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | POST | `/payments/` | Start a payment for an order; returns `snap_token` + `redirect_url` | buyer |
+| GET | `/payments/<id>` | Get a payment record (owning buyer or admin) | buyer, admin |
 | POST | `/payments/webhook/midtrans` | Midtrans status notification (signature-verified) | public |
 
 </details>
@@ -517,12 +518,19 @@ python3 -m pytest --cov=app --cov-report=term-missing
 python3 -m pytest --cov=app --cov-report=html   # open htmlcov/index.html
 ```
 
-![Pytest Result](./images/tests/v2/pytest-20260829.png)
+![Pytest Result](./images/tests/v3/pytest-20260912.png)
 
 ## Performance Testing (Locust)
 
-`locust/locustfile.py` simulates a customer journey (browse → view → order →
-verify) with weighted tasks. Each user logs in once, then repeats.
+`locust/locustfile.py` simulates a customer journey (browse → view → add to
+cart → cart checkout or direct checkout → create payment → check payment/order
+status) with weighted tasks, plus a seller fulfillment journey. Each user logs
+in once, then repeats.
+
+Payment creation calls Midtrans, so it is **off by default** to keep the load
+test independent of the external gateway. Enable it with
+`LOCUST_TEST_PAYMENTS=true` when you specifically want to stress the payment
+path (be mindful of Midtrans sandbox rate limits).
 
 ```bash
 python3 -m seeders.seeders && python3 run.py
@@ -538,7 +546,7 @@ locust -f locust/locustfile.py --host http://127.0.0.1:5000 \
 Logs in as the seeded buyer (`jane@example.com`); override with `LOCUST_EMAIL` /
 `LOCUST_PASSWORD`.
 
-![Locust Result](./images/tests/v2/locust-20260829.png)
+![Locust Result](./images/tests/v3/locust-20260912.png)
 
 ## Code Quality & Security
 

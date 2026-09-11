@@ -4,10 +4,12 @@ import random
 from locust import HttpUser, TaskSet, task, between, events
 
 LOGIN_EMAIL = os.getenv("LOCUST_EMAIL", "jane@example.com")
-LOGIN_PASSWORD = os.getenv("LOCUST_PASSWORD", "password456")
+LOGIN_PASSWORD = os.getenv("LOCUST_PASSWORD", "password123")
 
 SELLER_EMAIL = os.getenv("LOCUST_SELLER_EMAIL", "alice@example.com")
-SELLER_PASSWORD = os.getenv("LOCUST_SELLER_PASSWORD", "passwordabc")
+SELLER_PASSWORD = os.getenv("LOCUST_SELLER_PASSWORD", "password123")
+
+TEST_PAYMENTS = os.getenv("LOCUST_TEST_PAYMENTS", "false").lower() == "true"
 
 API = "/api/v1"
 
@@ -24,6 +26,7 @@ class CustomerJourney(TaskSet):
         self.in_stock = []
         self.product_id = None
         self.order_id = None
+        self.payment_id = None
 
     @task(4)
     def view_product(self):
@@ -58,6 +61,92 @@ class CustomerJourney(TaskSet):
             resp.success()
 
     @task(2)
+    def add_to_cart(self):
+        if not self.in_stock:
+            return
+
+        product = random.choice(self.in_stock)
+        with self.client.post(
+            f"{API}/cart/items",
+            json={"product_id": product["id"], "quantity": random.randint(1, 2)},
+            name="POST /cart/items (add to cart)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (201, 422):
+                resp.success()
+            else:
+                resp.failure(f"unexpected status {resp.status_code}")
+
+    @task(2)
+    def view_cart(self):
+        with self.client.get(
+            f"{API}/cart",
+            name="GET /cart (review cart)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 200:
+                resp.success()
+            else:
+                resp.failure(f"unexpected status {resp.status_code}")
+
+    @task(1)
+    def checkout_cart(self):
+        with self.client.get(
+            f"{API}/cart", name="GET /cart (review cart)", catch_response=True
+        ) as resp:
+            if resp.status_code != 200:
+                resp.failure(f"unexpected status {resp.status_code}")
+                return
+            groups = (resp.json() or {}).get("data", {}).get("groups", [])
+            resp.success()
+
+        has_items = any(g.get("items") for g in groups)
+        if not has_items:
+            return
+
+        with self.client.post(
+            f"{API}/cart/checkout",
+            json={},
+            name="POST /cart/checkout (checkout cart)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 201:
+                self.order_id = ((resp.json() or {}).get("data") or {}).get("id")
+                resp.success()
+            elif resp.status_code in (400, 409, 422):
+                resp.success()
+            else:
+                resp.failure(f"unexpected status {resp.status_code}")
+
+    @task(1)
+    def checkout_direct(self):
+        if not self.in_stock:
+            return
+
+        count = min(random.randint(1, 3), len(self.in_stock))
+        chosen = random.sample(self.in_stock, count)
+        items = [
+            {"product_id": p["id"], "quantity": random.randint(1, 2)}
+            for p in chosen
+        ]
+
+        with self.client.post(
+            f"{API}/orders/",
+            json={"items": items},
+            name="POST /orders (checkout without cart)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 201:
+                self.order_id = ((resp.json() or {}).get("data") or {}).get("id")
+                resp.success()
+            elif resp.status_code == 422:
+                self.order_id = None
+                resp.success()
+            else:
+                self.order_id = None
+                resp.failure(f"unexpected status {resp.status_code}")
+
+    @task(2)
     def verify_order(self):
         if self.order_id is None:
             return
@@ -80,31 +169,37 @@ class CustomerJourney(TaskSet):
                 )
 
     @task(1)
-    def place_order(self):
-        if not self.in_stock:
+    def create_payment(self):
+        if not TEST_PAYMENTS or self.order_id is None:
             return
 
-        count = min(random.randint(1, 3), len(self.in_stock))
-        chosen = random.sample(self.in_stock, count)
-        items = [
-            {"product_id": p["id"], "quantity": random.randint(1, 2)}
-            for p in chosen
-        ]
-
         with self.client.post(
-            f"{API}/orders/",
-            json={"items": items},
-            name="POST /orders (place order)",
+            f"{API}/payments/",
+            json={"order_id": self.order_id},
+            name="POST /payments (create midtrans payment)",
             catch_response=True,
         ) as resp:
             if resp.status_code == 201:
-                self.order_id = ((resp.json() or {}).get("data") or {}).get("id")
+                self.payment_id = ((resp.json() or {}).get("data") or {}).get("id")
                 resp.success()
-            elif resp.status_code == 422:
-                self.order_id = None
+            elif resp.status_code in (409, 502):
                 resp.success()
             else:
-                self.order_id = None
+                resp.failure(f"unexpected status {resp.status_code}")
+
+    @task(1)
+    def check_payment_status(self):
+        if self.payment_id is None:
+            return
+
+        with self.client.get(
+            f"{API}/payments/{self.payment_id}",
+            name="GET /payments/:id (payment status)",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 200:
+                resp.success()
+            else:
                 resp.failure(f"unexpected status {resp.status_code}")
 
 
