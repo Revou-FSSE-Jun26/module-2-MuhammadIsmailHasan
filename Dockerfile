@@ -24,7 +24,10 @@ RUN useradd --create-home --uid 1000 appuser \
     && chown -R appuser:appuser /app
 USER appuser
 
+ENV GUNICORN_WORKERS=3 \
+    PORT=5000
+
 EXPOSE 5000
 
 ENTRYPOINT ["entrypoint.sh"]
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "3", "run:application"]
+CMD gunicorn --bind 0.0.0.0:${PORT} --workers ${GUNICORN_WORKERS} run:application

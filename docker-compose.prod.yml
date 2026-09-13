@@ -33,6 +33,12 @@ services:
       JWT_ACCESS_TOKEN_EXPIRES: ${JWT_ACCESS_TOKEN_EXPIRES:-15}
       JWT_REFRESH_TOKEN_EXPIRES: ${JWT_REFRESH_TOKEN_EXPIRES:-7}
       GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      PORT: "5000"
+      RUN_MIGRATIONS: "true"
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY:-}
+      MIDTRANS_CLIENT_KEY: ${MIDTRANS_CLIENT_KEY:-}
+      MIDTRANS_IS_PRODUCTION: ${MIDTRANS_IS_PRODUCTION:-false}
+      MIDTRANS_EXPIRY_MINUTES: ${MIDTRANS_EXPIRY_MINUTES:-1440}
     ports:
       - "${WEB_PORT:-8000}:5000"
     depends_on:
@@ -40,6 +46,12 @@ services:
         condition: service_healthy
     networks:
       - revoshop-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:5000/api/v1/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   pgdata:

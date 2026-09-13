@@ -23,6 +23,7 @@ coverage.xml
 # Environment Variables
 # =======
 .env
+.env.docker
 !.env.example
 
 
