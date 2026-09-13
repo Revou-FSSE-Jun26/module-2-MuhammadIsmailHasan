@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: 2309fe89-87f5-4467-9633-1cf0e0e310d8
+
+localResources:
+  collections:
+    - ../docs/revoshop.postman_collection.json
