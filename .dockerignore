@@ -10,7 +10,6 @@ venv/
 env/
 
 # Tests, coverage, caches
-tests/
 .pytest_cache/
 .coverage
 htmlcov/
@@ -42,6 +41,5 @@ docker-compose*.yml
 jira/
 locust/
 images/
-requirements-dev.txt
 .pylintrc
 README.md
