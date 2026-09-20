@@ -30,3 +30,9 @@ class HealthCheck(MethodView):
             status_code=200 if database_ok else 503,
             status=database_ok,
         )
+
+@health_blp.route('/live')
+class Liveness(MethodView):
+    
+    def get(self):
+        return make_response('alive')

@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+
 FROM base AS dependencies
 RUN python -m venv /opt/venv
 COPY requirements.txt .
@@ -26,6 +27,7 @@ CMD ["flask", "--app", "run:application", "run", "--debug", "--host", "0.0.0.0",
 
 FROM dev AS test
 RUN python -m pytest -q -p no:cacheprovider
+
 
 FROM base AS prod
 ARG VERSION=dev

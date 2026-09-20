@@ -9,10 +9,13 @@ from config import config_by_name
 
 def create_app(config_name=None):
     if config_name is None:
-        config_name = os.getenv('FLASK_ENV', 'development')
+        config_name = os.getenv('APP_ENV', 'development') or os.getenv('FLASK_ENV', 'development')
+    if config_name not in config_by_name:
+        raise RuntimeError(f"Unknown APP_ENV {config_name!r}; use one of {sorted(config_by_name)}")
 
     flask_app = Flask(__name__)
     flask_app.config.from_object(config_by_name[config_name])
+    config_by_name[config_name].validate(flask_app.config)
 
     # Logging
     configure_logging(flask_app)

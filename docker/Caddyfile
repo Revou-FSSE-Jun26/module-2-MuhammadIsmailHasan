@@ -1,0 +1,12 @@
+# Local: SITE_ADDRESS=:80 (plain HTTP). On a server with a domain: SITE_ADDRESS=api.example.com → automatic HTTPS.
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	reverse_proxy api:5000 {
+		health_uri /api/v1/health/live
+	}
+}
