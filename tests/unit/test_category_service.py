@@ -17,18 +17,17 @@ from app.services.category_service import (
 )
 
 
-def make_category(id=1, name='Electronics', is_active=True):
+def make_category(id=1, name="Electronics", is_active=True):
     return SimpleNamespace(id=id, name=name, is_active=is_active)
 
 
 @pytest.fixture
 def repo():
-    with patch('app.services.category_service.CategoryRepository') as mock_repo:
+    with patch("app.services.category_service.CategoryRepository") as mock_repo:
         yield mock_repo
 
 
 class TestGetById:
-
     def test_success(self, repo):
         repo.get_by_id.return_value = make_category(id=2)
         assert CategoryService.get_by_id(2).id == 2
@@ -40,61 +39,76 @@ class TestGetById:
 
 
 class TestCreate:
-
     def test_success(self, repo):
         repo.find_by_name.return_value = None
-        repo.create.return_value = make_category(name='Books')
+        repo.create.return_value = make_category(name="Books")
 
-        result = CategoryService.create({'name': 'Books'})
-        assert result.name == 'Books'
-        repo.create.assert_called_once_with({'name': 'Books'})
+        result = CategoryService.create({"name": "Books"})
+        assert result.name == "Books"
+        repo.create.assert_called_once_with({"name": "Books"})
 
     def test_duplicate_name(self, repo):
-        repo.find_by_name.return_value = make_category(name='Books')
+        repo.find_by_name.return_value = make_category(name="Books")
         with pytest.raises(CategoryNameExistsError):
-            CategoryService.create({'name': 'Books'})
+            CategoryService.create({"name": "Books"})
         repo.create.assert_not_called()
+
+    def test_passes_image_through_to_repository(self, repo):
+        repo.find_by_name.return_value = None
+        repo.create.return_value = make_category(name="Books")
+
+        data = {"name": "Books", "image": "https://cdn.example.com/c.jpg"}
+        CategoryService.create(data)
+        repo.create.assert_called_once_with(data)
 
 
 class TestUpdate:
-
     def test_success(self, repo):
-        category = make_category(id=1, name='Old')
+        category = make_category(id=1, name="Old")
         repo.get_by_id.return_value = category
         repo.find_by_name.return_value = None
         repo.update.return_value = category
 
-        CategoryService.update(1, {'name': 'New'})
-        repo.update.assert_called_once_with(category, {'name': 'New'})
+        CategoryService.update(1, {"name": "New"})
+        repo.update.assert_called_once_with(category, {"name": "New"})
+
+    def test_passes_image_through_to_repository(self, repo):
+        category = make_category(id=1, name="Old")
+        repo.get_by_id.return_value = category
+        repo.update.return_value = category
+
+        CategoryService.update(1, {"image": "https://cdn.example.com/c.jpg"})
+        repo.update.assert_called_once_with(
+            category, {"image": "https://cdn.example.com/c.jpg"}
+        )
 
     def test_not_found(self, repo):
         repo.get_by_id.return_value = None
         with pytest.raises(CategoryNotFoundError):
-            CategoryService.update(1, {'name': 'New'})
+            CategoryService.update(1, {"name": "New"})
 
     def test_duplicate_name_excludes_self(self, repo):
-        category = make_category(id=1, name='Old')
+        category = make_category(id=1, name="Old")
         repo.get_by_id.return_value = category
-        repo.find_by_name.return_value = make_category(id=2, name='New')
+        repo.find_by_name.return_value = make_category(id=2, name="New")
 
         with pytest.raises(CategoryNameExistsError):
-            CategoryService.update(1, {'name': 'New'})
+            CategoryService.update(1, {"name": "New"})
         # duplicate check must exclude the current category id
-        repo.find_by_name.assert_called_once_with('New', exclude_id=1)
+        repo.find_by_name.assert_called_once_with("New", exclude_id=1)
 
     def test_no_effective_changes_returns_category_without_update(self, repo):
-        category = make_category(id=1, name='Old')
+        category = make_category(id=1, name="Old")
         repo.get_by_id.return_value = category
 
         # all values None -> nothing to update
-        result = CategoryService.update(1, {'name': None})
+        result = CategoryService.update(1, {"name": None})
         assert result is category
         repo.update.assert_not_called()
         repo.find_by_name.assert_not_called()
 
 
 class TestDelete:
-
     def test_success(self, repo):
         category = make_category(id=1)
         repo.get_by_id.return_value = category

@@ -6,8 +6,18 @@ Jalankan dengan: python -c "from seeders import seed_test_data; seed_test_data()
 from app import create_app
 from app.extensions import db
 from app.models import (
-    User, Product, Category, Order, OrderItem, ProductImage, Cart, CartItem,
-    UserProfile, UserAddress, Payment
+    User,
+    Product,
+    Category,
+    SubCategory,
+    Order,
+    OrderItem,
+    ProductImage,
+    Cart,
+    CartItem,
+    UserProfile,
+    UserAddress,
+    Payment,
 )
 from app.utils.slug import slugify
 import bcrypt
@@ -28,6 +38,7 @@ def clear_tables():
         db.session.query(Order).delete()
         db.session.query(ProductImage).delete()
         db.session.query(Product).delete()
+        db.session.query(SubCategory).delete()
         db.session.query(UserAddress).delete()
         db.session.query(UserProfile).delete()
         db.session.query(User).delete()
@@ -43,11 +54,26 @@ def clear_tables():
 def seed_categories():
     """Seed kategori produk"""
     categories = [
-        Category(name='Electronics'),
-        Category(name='Clothing'),
-        Category(name='Food & Beverages'),
-        Category(name='Books'),
-        Category(name='Sports'),
+        Category(
+            name="Electronics",
+            image="https://cdn.example.com/categories/electronics.jpg",
+        ),
+        Category(
+            name="Clothing",
+            image="https://cdn.example.com/categories/clothing.jpg",
+        ),
+        Category(
+            name="Food & Beverages",
+            image="https://cdn.example.com/categories/food-and-beverages.jpg",
+        ),
+        Category(
+            name="Books",
+            image="https://cdn.example.com/categories/books.jpg",
+        ),
+        Category(
+            name="Sports",
+            image="https://cdn.example.com/categories/sports.jpg",
+        ),
     ]
 
     try:
@@ -61,38 +87,74 @@ def seed_categories():
         raise
 
 
+def seed_sub_categories():
+    """Seed sub-kategori produk (many-to-one ke categories)"""
+    sub_categories_map = {
+        "Electronics": ["Laptops", "Accessories"],
+        "Clothing": ["Men", "Women"],
+        "Food & Beverages": ["Coffee", "Tea"],
+        "Books": ["Fiction", "Non-Fiction"],
+        "Sports": ["Outdoor", "Fitness"],
+    }
+
+    sub_categories = []
+    try:
+        for category_name, sub_names in sub_categories_map.items():
+            category = Category.query.filter_by(name=category_name).first()
+            if not category:
+                continue
+            for sub_name in sub_names:
+                sub_slug = slugify(sub_name)
+                sub_categories.append(
+                    SubCategory(
+                        name=sub_name,
+                        category_id=category.id,
+                        image=f"https://cdn.example.com/sub-categories/{sub_slug}.jpg",
+                    )
+                )
+
+        db.session.add_all(sub_categories)
+        db.session.commit()
+        print(f"Created {len(sub_categories)} sub categories")
+        return sub_categories
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error seeding sub categories: {e}")
+        raise
+
+
 def seed_users():
     """Seed user untuk testing"""
     users_data = [
         {
-            'username': 'john_doe',
-            'email': 'john@example.com',
-            'password': 'password123',
-            'role': 'admin'
+            "username": "john_doe",
+            "email": "john@example.com",
+            "password": "password123",
+            "role": "admin",
         },
         {
-            'username': 'jane_smith',
-            'email': 'jane@example.com',
-            'password': 'password123',
-            'role': 'buyer'
+            "username": "jane_smith",
+            "email": "jane@example.com",
+            "password": "password123",
+            "role": "buyer",
         },
         {
-            'username': 'bob_wilson',
-            'email': 'bob@example.com',
-            'password': 'password123',
-            'role': 'buyer'
+            "username": "bob_wilson",
+            "email": "bob@example.com",
+            "password": "password123",
+            "role": "buyer",
         },
         {
-            'username': 'alice_brown',
-            'email': 'alice@example.com',
-            'password': 'password123',
-            'role': 'seller'
+            "username": "alice_brown",
+            "email": "alice@example.com",
+            "password": "password123",
+            "role": "seller",
         },
         {
-            'username': 'charlie_davis',
-            'email': 'charlie@example.com',
-            'password': 'password123',
-            'role': 'seller'
+            "username": "charlie_davis",
+            "email": "charlie@example.com",
+            "password": "password123",
+            "role": "seller",
         },
     ]
 
@@ -100,15 +162,14 @@ def seed_users():
     try:
         for user_data in users_data:
             password_hash = bcrypt.hashpw(
-                user_data['password'].encode('utf-8'),
-                bcrypt.gensalt()
-            ).decode('utf-8')
+                user_data["password"].encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
             user = User(
-                username=user_data['username'],
-                email=user_data['email'],
+                username=user_data["username"],
+                email=user_data["email"],
                 password_hash=password_hash,
-                role=user_data['role'],
-                last_login=utcnow() - timedelta(days=1)
+                role=user_data["role"],
+                last_login=utcnow() - timedelta(days=1),
             )
             users.append(user)
 
@@ -124,95 +185,97 @@ def seed_users():
 
 def seed_products():
     """Seed produk untuk testing"""
-    electronics_cat = Category.query.filter_by(name='Electronics').first()
-    clothing_cat = Category.query.filter_by(name='Clothing').first()
-    food_cat = Category.query.filter_by(name='Food & Beverages').first()
+    laptops_sub = SubCategory.query.filter_by(name="Laptops").first()
+    accessories_sub = SubCategory.query.filter_by(name="Accessories").first()
+    men_sub = SubCategory.query.filter_by(name="Men").first()
+    coffee_sub = SubCategory.query.filter_by(name="Coffee").first()
+    tea_sub = SubCategory.query.filter_by(name="Tea").first()
 
-    seller_alice = User.query.filter_by(username='alice_brown').first()
-    seller_charlie = User.query.filter_by(username='charlie_davis').first()
+    seller_alice = User.query.filter_by(username="alice_brown").first()
+    seller_charlie = User.query.filter_by(username="charlie_davis").first()
     alice_id = seller_alice.id if seller_alice else None
     charlie_id = seller_charlie.id if seller_charlie else None
 
     products_data = [
         {
-            'category_id': electronics_cat.id if electronics_cat else None,
-            'seller_id': alice_id,
-            'name': 'Laptop ASUS Vivobook 14',
-            'description': 'Laptop ringan dengan RAM 16GB dan SSD 512GB',
-            'price': 8499000,
-            'stock': 15
+            "sub_category_id": laptops_sub.id if laptops_sub else None,
+            "seller_id": alice_id,
+            "name": "Laptop ASUS Vivobook 14",
+            "description": "Laptop ringan dengan RAM 16GB dan SSD 512GB",
+            "price": 8499000,
+            "stock": 15,
         },
         {
-            'category_id': electronics_cat.id if electronics_cat else None,
-            'seller_id': alice_id,
-            'name': 'Mouse Wireless Logitech',
-            'description': 'Mouse wireless ergonomis dengan baterai tahan lama',
-            'price': 185000,
-            'stock': 50
+            "sub_category_id": accessories_sub.id if accessories_sub else None,
+            "seller_id": alice_id,
+            "name": "Mouse Wireless Logitech",
+            "description": "Mouse wireless ergonomis dengan baterai tahan lama",
+            "price": 185000,
+            "stock": 50,
         },
         {
-            'category_id': electronics_cat.id if electronics_cat else None,
-            'seller_id': alice_id,
-            'name': 'Kabel USB-C 2 Meter',
-            'description': 'Kabel USB-C untuk charging dan transfer data',
-            'price': 45000,
-            'stock': 100
+            "sub_category_id": accessories_sub.id if accessories_sub else None,
+            "seller_id": alice_id,
+            "name": "Kabel USB-C 2 Meter",
+            "description": "Kabel USB-C untuk charging dan transfer data",
+            "price": 45000,
+            "stock": 100,
         },
         {
-            'category_id': electronics_cat.id if electronics_cat else None,
-            'seller_id': alice_id,
-            'name': 'Monitor LG 27 Inch 4K',
-            'description': 'Monitor IPS 4K dengan konektivitas USB-C',
-            'price': 3750000,
-            'stock': 10
+            "sub_category_id": accessories_sub.id if accessories_sub else None,
+            "seller_id": alice_id,
+            "name": "Monitor LG 27 Inch 4K",
+            "description": "Monitor IPS 4K dengan konektivitas USB-C",
+            "price": 3750000,
+            "stock": 10,
         },
         {
-            'category_id': electronics_cat.id if electronics_cat else None,
-            'seller_id': alice_id,
-            'name': 'Keyboard Mekanik RGB',
-            'description': 'Keyboard mekanik dengan lampu RGB dan blue switch',
-            'price': 649000,
-            'stock': 25
+            "sub_category_id": accessories_sub.id if accessories_sub else None,
+            "seller_id": alice_id,
+            "name": "Keyboard Mekanik RGB",
+            "description": "Keyboard mekanik dengan lampu RGB dan blue switch",
+            "price": 649000,
+            "stock": 25,
         },
         {
-            'category_id': clothing_cat.id if clothing_cat else None,
-            'seller_id': charlie_id,
-            'name': 'Kaos Katun Combed 30s',
-            'description': 'Kaos katun combed 30s, tersedia berbagai warna',
-            'price': 75000,
-            'stock': 75
+            "sub_category_id": men_sub.id if men_sub else None,
+            "seller_id": charlie_id,
+            "name": "Kaos Katun Combed 30s",
+            "description": "Kaos katun combed 30s, tersedia berbagai warna",
+            "price": 75000,
+            "stock": 75,
         },
         {
-            'category_id': clothing_cat.id if clothing_cat else None,
-            'seller_id': charlie_id,
-            'name': 'Celana Jeans Denim',
-            'description': 'Celana jeans denim klasik dengan potongan nyaman',
-            'price': 249000,
-            'stock': 40
+            "sub_category_id": men_sub.id if men_sub else None,
+            "seller_id": charlie_id,
+            "name": "Celana Jeans Denim",
+            "description": "Celana jeans denim klasik dengan potongan nyaman",
+            "price": 249000,
+            "stock": 40,
         },
         {
-            'category_id': clothing_cat.id if clothing_cat else None,
-            'seller_id': charlie_id,
-            'name': 'Jaket Hoodie Fleece',
-            'description': 'Jaket hoodie bahan fleece, hangat dan nyaman',
-            'price': 189000,
-            'stock': 30
+            "sub_category_id": men_sub.id if men_sub else None,
+            "seller_id": charlie_id,
+            "name": "Jaket Hoodie Fleece",
+            "description": "Jaket hoodie bahan fleece, hangat dan nyaman",
+            "price": 189000,
+            "stock": 30,
         },
         {
-            'category_id': food_cat.id if food_cat else None,
-            'seller_id': charlie_id,
-            'name': 'Kopi Arabika Gayo 1kg',
-            'description': 'Biji kopi arabika Gayo premium, kemasan 1kg',
-            'price': 135000,
-            'stock': 60
+            "sub_category_id": coffee_sub.id if coffee_sub else None,
+            "seller_id": charlie_id,
+            "name": "Kopi Arabika Gayo 1kg",
+            "description": "Biji kopi arabika Gayo premium, kemasan 1kg",
+            "price": 135000,
+            "stock": 60,
         },
         {
-            'category_id': food_cat.id if food_cat else None,
-            'seller_id': charlie_id,
-            'name': 'Teh Hijau Celup 50 Kantong',
-            'description': 'Teh hijau organik, isi 50 kantong celup',
-            'price': 28000,
-            'stock': 80
+            "sub_category_id": tea_sub.id if tea_sub else None,
+            "seller_id": charlie_id,
+            "name": "Teh Hijau Celup 50 Kantong",
+            "description": "Teh hijau organik, isi 50 kantong celup",
+            "price": 28000,
+            "stock": 80,
         },
     ]
 
@@ -220,13 +283,13 @@ def seed_products():
     try:
         for product_data in products_data:
             product = Product(
-                category_id=product_data['category_id'],
-                seller_id=product_data['seller_id'],
-                name=product_data['name'],
-                slug=slugify(product_data['name']),
-                description=product_data['description'],
-                price=product_data['price'],
-                stock=product_data['stock']
+                sub_category_id=product_data["sub_category_id"],
+                seller_id=product_data["seller_id"],
+                name=product_data["name"],
+                slug=slugify(product_data["name"]),
+                description=product_data["description"],
+                price=product_data["price"],
+                stock=product_data["stock"],
             )
             products.append(product)
 
@@ -256,7 +319,7 @@ def seed_product_images():
                 images.append(
                     ProductImage(
                         product_id=product.id,
-                        url=f'https://cdn.example.com/products/{slug}-{order + 1}.jpg',
+                        url=f"https://cdn.example.com/products/{slug}-{order + 1}.jpg",
                         order=order,
                     )
                 )
@@ -273,8 +336,8 @@ def seed_product_images():
 
 def seed_orders():
     """Seed orders dengan berbagai status untuk testing"""
-    buyer = User.query.filter_by(username='jane_smith').first()
-    buyer2 = User.query.filter_by(username='bob_wilson').first()
+    buyer = User.query.filter_by(username="jane_smith").first()
+    buyer2 = User.query.filter_by(username="bob_wilson").first()
     products = Product.query.limit(5).all()
 
     if not buyer or not buyer2 or len(products) < 3:
@@ -283,96 +346,104 @@ def seed_orders():
 
     orders_data = [
         {
-            'user': buyer,
-            'status': 'waiting_for_payment',
-            'items': [
-                {'product': products[0], 'quantity': 1},
-                {'product': products[1], 'quantity': 2},
-            ]
+            "user": buyer,
+            "status": "waiting_for_payment",
+            "items": [
+                {"product": products[0], "quantity": 1},
+                {"product": products[1], "quantity": 2},
+            ],
         },
         {
-            'user': buyer,
-            'status': 'paid',
-            'items': [
-                {'product': products[1], 'quantity': 1},
-            ]
+            "user": buyer,
+            "status": "paid",
+            "items": [
+                {"product": products[1], "quantity": 1},
+            ],
         },
         {
-            'user': buyer,
-            'status': 'processing',
-            'items': [
-                {'product': products[2], 'quantity': 1},
-            ]
+            "user": buyer,
+            "status": "processing",
+            "items": [
+                {"product": products[2], "quantity": 1},
+            ],
         },
         {
-            'user': buyer,
-            'status': 'shipped',
-            'tracking_id': 'JNE-0001234567',
-            'items': [
-                {'product': products[3], 'quantity': 1},
-            ]
+            "user": buyer,
+            "status": "shipped",
+            "tracking_id": "JNE-0001234567",
+            "items": [
+                {"product": products[3], "quantity": 1},
+            ],
         },
         {
-            'user': buyer2,
-            'status': 'delivered',
-            'tracking_id': 'SICEPAT-0007654321',
-            'items': [
-                {'product': products[0], 'quantity': 2},
-                {'product': products[4], 'quantity': 1},
-            ]
+            "user": buyer2,
+            "status": "delivered",
+            "tracking_id": "SICEPAT-0007654321",
+            "items": [
+                {"product": products[0], "quantity": 2},
+                {"product": products[4], "quantity": 1},
+            ],
         },
         {
-            'user': buyer2,
-            'status': 'returned',
-            'tracking_id': 'JNE-0009876543',
-            'items': [
-                {'product': products[2], 'quantity': 1},
-            ]
+            "user": buyer2,
+            "status": "returned",
+            "tracking_id": "JNE-0009876543",
+            "items": [
+                {"product": products[2], "quantity": 1},
+            ],
         },
         {
-            'user': buyer2,
-            'status': 'cancelled',
-            'is_active': False,
-            'items': [
-                {'product': products[1], 'quantity': 3},
-            ]
+            "user": buyer2,
+            "status": "cancelled",
+            "is_active": False,
+            "items": [
+                {"product": products[1], "quantity": 3},
+            ],
         },
     ]
 
     try:
         for order_data in orders_data:
-            total_amount = Decimal('0')
+            total_amount = Decimal("0")
             items_to_add = []
 
-            for item in order_data['items']:
-                product = item['product']
-                quantity = item['quantity']
+            for item in order_data["items"]:
+                product = item["product"]
+                quantity = item["quantity"]
                 unit_price = product.price
                 sub_total = unit_price * quantity
                 total_amount += Decimal(str(float(sub_total)))
-                items_to_add.append({
-                    'product_id': product.id,
-                    'unit_price': unit_price,
-                    'quantity': quantity,
-                    'sub_total': sub_total
-                })
+                items_to_add.append(
+                    {
+                        "product_id": product.id,
+                        "unit_price": unit_price,
+                        "quantity": quantity,
+                        "sub_total": sub_total,
+                    }
+                )
 
             default_address = UserAddress.query.filter_by(
-                user_id=order_data['user'].id, is_default=True, is_active=True
+                user_id=order_data["user"].id, is_default=True, is_active=True
             ).first()
 
             order = Order(
-                user_id=order_data['user'].id,
+                user_id=order_data["user"].id,
                 total_amount=total_amount,
-                status=order_data['status'],
-                is_active=order_data.get('is_active', True),
+                status=order_data["status"],
+                is_active=order_data.get("is_active", True),
                 ordered_at=utcnow() - timedelta(days=len(orders_data)),
-                shipping_recipient_name=default_address.recipient_name if default_address else None,
+                shipping_recipient_name=default_address.recipient_name
+                if default_address
+                else None,
                 shipping_phone=default_address.phone if default_address else None,
-                shipping_address_line=default_address.address_line if default_address else None,
+                shipping_address_line=default_address.address_line
+                if default_address
+                else None,
                 shipping_city=default_address.city if default_address else None,
-                shipping_postal_code=default_address.postal_code if default_address else None,
-                tracking_id=order_data.get('tracking_id'),
+                shipping_postal_code=default_address.postal_code
+                if default_address
+                else None,
+                tracking_id=order_data.get("tracking_id"),
             )
             db.session.add(order)
             db.session.flush()
@@ -380,10 +451,10 @@ def seed_orders():
             for item_data in items_to_add:
                 order_item = OrderItem(
                     order_id=order.id,
-                    product_id=item_data['product_id'],
-                    unit_price=item_data['unit_price'],
-                    quantity=item_data['quantity'],
-                    sub_total=item_data['sub_total']
+                    product_id=item_data["product_id"],
+                    unit_price=item_data["unit_price"],
+                    quantity=item_data["quantity"],
+                    sub_total=item_data["sub_total"],
                 )
                 db.session.add(order_item)
 
@@ -396,13 +467,13 @@ def seed_orders():
 
 
 def seed_carts():
-    buyer = User.query.filter_by(username='jane_smith').first()
+    buyer = User.query.filter_by(username="jane_smith").first()
     if not buyer:
         print("Cannot seed carts: buyer not found")
         return
 
-    alice = User.query.filter_by(username='alice_brown').first()
-    charlie = User.query.filter_by(username='charlie_davis').first()
+    alice = User.query.filter_by(username="alice_brown").first()
+    charlie = User.query.filter_by(username="charlie_davis").first()
 
     alice_product = (
         Product.query.filter_by(seller_id=alice.id).first() if alice else None
@@ -422,11 +493,13 @@ def seed_carts():
         db.session.flush()
 
         for index, product in enumerate(picks):
-            db.session.add(CartItem(
-                cart_id=cart.id,
-                product_id=product.id,
-                quantity=index + 1,
-            ))
+            db.session.add(
+                CartItem(
+                    cart_id=cart.id,
+                    product_id=product.id,
+                    quantity=index + 1,
+                )
+            )
 
         db.session.commit()
         print(f"Created 1 cart with {len(picks)} items")
@@ -439,11 +512,11 @@ def seed_carts():
 
 def seed_user_profiles():
     profiles_data = {
-        'john_doe': {'full_name': 'John Doe', 'phone': '+62811000001'},
-        'jane_smith': {'full_name': 'Jane Smith', 'phone': '+62811000002'},
-        'bob_wilson': {'full_name': 'Bob Wilson', 'phone': '+62811000003'},
-        'alice_brown': {'full_name': 'Alice Brown', 'phone': '+62811000004'},
-        'charlie_davis': {'full_name': 'Charlie Davis', 'phone': '+62811000005'},
+        "john_doe": {"full_name": "John Doe", "phone": "+62811000001"},
+        "jane_smith": {"full_name": "Jane Smith", "phone": "+62811000002"},
+        "bob_wilson": {"full_name": "Bob Wilson", "phone": "+62811000003"},
+        "alice_brown": {"full_name": "Alice Brown", "phone": "+62811000004"},
+        "charlie_davis": {"full_name": "Charlie Davis", "phone": "+62811000005"},
     }
 
     try:
@@ -452,11 +525,13 @@ def seed_user_profiles():
             user = User.query.filter_by(username=username).first()
             if not user:
                 continue
-            profiles.append(UserProfile(
-                user_id=user.id,
-                full_name=data['full_name'],
-                phone=data['phone'],
-            ))
+            profiles.append(
+                UserProfile(
+                    user_id=user.id,
+                    full_name=data["full_name"],
+                    phone=data["phone"],
+                )
+            )
         db.session.add_all(profiles)
         db.session.commit()
         print(f"Created {len(profiles)} user profiles")
@@ -469,23 +544,35 @@ def seed_user_profiles():
 
 def seed_user_addresses():
     addresses_data = {
-        'jane_smith': [
+        "jane_smith": [
             {
-                'label': 'Home', 'recipient_name': 'Jane Smith',
-                'phone': '+62811000002', 'address_line': 'Jl. Melati No. 1',
-                'city': 'Jakarta', 'postal_code': '10110', 'is_default': True,
+                "label": "Home",
+                "recipient_name": "Jane Smith",
+                "phone": "+62811000002",
+                "address_line": "Jl. Melati No. 1",
+                "city": "Jakarta",
+                "postal_code": "10110",
+                "is_default": True,
             },
             {
-                'label': 'Office', 'recipient_name': 'Jane Smith',
-                'phone': '+62811000002', 'address_line': 'Jl. Sudirman No. 99',
-                'city': 'Jakarta', 'postal_code': '10220', 'is_default': False,
+                "label": "Office",
+                "recipient_name": "Jane Smith",
+                "phone": "+62811000002",
+                "address_line": "Jl. Sudirman No. 99",
+                "city": "Jakarta",
+                "postal_code": "10220",
+                "is_default": False,
             },
         ],
-        'bob_wilson': [
+        "bob_wilson": [
             {
-                'label': 'Home', 'recipient_name': 'Bob Wilson',
-                'phone': '+62811000003', 'address_line': 'Jl. Kenanga No. 5',
-                'city': 'Bandung', 'postal_code': '40111', 'is_default': True,
+                "label": "Home",
+                "recipient_name": "Bob Wilson",
+                "phone": "+62811000003",
+                "address_line": "Jl. Kenanga No. 5",
+                "city": "Bandung",
+                "postal_code": "40111",
+                "is_default": True,
             },
         ],
     }
@@ -497,16 +584,18 @@ def seed_user_addresses():
             if not user:
                 continue
             for entry in entries:
-                addresses.append(UserAddress(
-                    user_id=user.id,
-                    label=entry['label'],
-                    recipient_name=entry['recipient_name'],
-                    phone=entry['phone'],
-                    address_line=entry['address_line'],
-                    city=entry['city'],
-                    postal_code=entry['postal_code'],
-                    is_default=entry['is_default'],
-                ))
+                addresses.append(
+                    UserAddress(
+                        user_id=user.id,
+                        label=entry["label"],
+                        recipient_name=entry["recipient_name"],
+                        phone=entry["phone"],
+                        address_line=entry["address_line"],
+                        city=entry["city"],
+                        postal_code=entry["postal_code"],
+                        is_default=entry["is_default"],
+                    )
+                )
         db.session.add_all(addresses)
         db.session.commit()
         print(f"Created {len(addresses)} user addresses")
@@ -527,6 +616,7 @@ def seed_test_data():
         try:
             clear_tables()
             seed_categories()
+            seed_sub_categories()
             seed_users()
             seed_user_profiles()
             seed_user_addresses()
@@ -542,6 +632,7 @@ def seed_test_data():
             print("Summary:")
             print(f"  Users: {User.query.count()}")
             print(f"  Categories: {Category.query.count()}")
+            print(f"  Sub Categories: {SubCategory.query.count()}")
             print(f"  Products: {Product.query.count()}")
             print(f"  Product Images: {ProductImage.query.count()}")
             print(f"  Orders: {Order.query.count()}")
@@ -556,5 +647,5 @@ def seed_test_data():
             raise
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     seed_test_data()

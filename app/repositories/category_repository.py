@@ -3,23 +3,22 @@ from app.extensions import db
 
 
 class CategoryRepository:
-
     @staticmethod
-    def get_all(filters=None, sort_by='id', order='asc', page=1, limit=10):
+    def get_all(filters=None, sort_by="id", order="asc", page=1, limit=10):
         query = Category.query.filter_by(is_active=True)
 
         if filters:
-            if filters.get('name'):
+            if filters.get("name"):
                 query = query.filter(Category.name.ilike(f"%{filters['name']}%"))
 
         sort_columns = {
-            'id': Category.id,
-            'name': Category.name,
-            'created_at': Category.created_at,
+            "id": Category.id,
+            "name": Category.name,
+            "created_at": Category.created_at,
         }
         sort_column = sort_columns.get(sort_by, Category.id)
 
-        if order == 'desc':
+        if order == "desc":
             query = query.order_by(sort_column.desc())
         else:
             query = query.order_by(sort_column.asc())
@@ -39,15 +38,17 @@ class CategoryRepository:
 
     @staticmethod
     def create(data):
-        category = Category(name=data['name'])
+        category = Category(name=data["name"], image=data.get("image"))
         db.session.add(category)
         db.session.commit()
         return category
 
     @staticmethod
     def update(category, data):
-        if 'name' in data:
-            category.name = data['name']
+        if "name" in data:
+            category.name = data["name"]
+        if "image" in data:
+            category.image = data["image"]
 
         db.session.commit()
         return category

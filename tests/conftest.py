@@ -1,25 +1,28 @@
 import os
 import pytest
 
-os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app import create_app
 from app.extensions import db as _db
 from app.models.users import User
 from app.models.categories import Category
+from app.models.sub_categories import SubCategory
 from app.models.products import Product
 from app.models.user_addresses import UserAddress
 from app.auth import hash_password
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def app():
     app = create_app()
-    app.config.update({
-        'TESTING': True,
-        'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',
-        'JWT_SECRET_KEY': 'test-secret-key',
-    })
+    app.config.update(
+        {
+            "TESTING": True,
+            "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            "JWT_SECRET_KEY": "test-secret-key",
+        }
+    )
 
     with app.app_context():
         _db.create_all()
@@ -30,7 +33,7 @@ def app():
         _db.drop_all()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def db(app):
     with app.app_context():
         _db.create_all()
@@ -39,36 +42,36 @@ def db(app):
         _db.drop_all()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def client(app, db):
     return app.test_client()
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def seed_users(db):
     buyer = User(
-        username='buyer_test',
-        email='buyer@test.com',
-        password_hash=hash_password('password123'),
-        role='buyer'
+        username="buyer_test",
+        email="buyer@test.com",
+        password_hash=hash_password("password123"),
+        role="buyer",
     )
     seller = User(
-        username='seller_test',
-        email='seller@test.com',
-        password_hash=hash_password('password123'),
-        role='seller'
+        username="seller_test",
+        email="seller@test.com",
+        password_hash=hash_password("password123"),
+        role="seller",
     )
     seller2 = User(
-        username='seller2_test',
-        email='seller2@test.com',
-        password_hash=hash_password('password123'),
-        role='seller'
+        username="seller2_test",
+        email="seller2@test.com",
+        password_hash=hash_password("password123"),
+        role="seller",
     )
     admin = User(
-        username='admin_test',
-        email='admin@test.com',
-        password_hash=hash_password('password123'),
-        role='admin'
+        username="admin_test",
+        email="admin@test.com",
+        password_hash=hash_password("password123"),
+        role="admin",
     )
 
     db.session.add_all([buyer, seller, seller2, admin])
@@ -76,24 +79,30 @@ def seed_users(db):
 
     buyer_address = UserAddress(
         user_id=buyer.id,
-        label='Home',
-        recipient_name='Buyer Test',
-        phone='+628123456789',
-        address_line='Jl. Test No. 1',
-        city='Jakarta',
-        postal_code='10110',
+        label="Home",
+        recipient_name="Buyer Test",
+        phone="+628123456789",
+        address_line="Jl. Test No. 1",
+        city="Jakarta",
+        postal_code="10110",
         is_default=True,
     )
     db.session.add(buyer_address)
     db.session.commit()
 
-    return {'buyer': buyer, 'seller': seller, 'seller2': seller2, 'admin': admin}
+    return {"buyer": buyer, "seller": seller, "seller2": seller2, "admin": admin}
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(scope="function")
 def seed_categories(db):
-    cat1 = Category(name='Electronics')
-    cat2 = Category(name='Clothing')
+    cat1 = Category(
+        name="Electronics",
+        image="https://cdn.example.com/categories/electronics.jpg",
+    )
+    cat2 = Category(
+        name="Clothing",
+        image="https://cdn.example.com/categories/clothing.jpg",
+    )
 
     db.session.add_all([cat1, cat2])
     db.session.commit()
@@ -101,26 +110,47 @@ def seed_categories(db):
     return [cat1, cat2]
 
 
-@pytest.fixture(scope='function')
-def seed_products(db, seed_users, seed_categories):
+@pytest.fixture(scope="function")
+def seed_sub_categories(db, seed_categories):
     categories = seed_categories
-    seller = seed_users['seller']
+
+    sub1 = SubCategory(
+        name="Laptops",
+        category_id=categories[0].id,
+        image="https://cdn.example.com/sub-categories/laptops.jpg",
+    )
+    sub2 = SubCategory(
+        name="Men",
+        category_id=categories[1].id,
+        image="https://cdn.example.com/sub-categories/men.jpg",
+    )
+
+    db.session.add_all([sub1, sub2])
+    db.session.commit()
+
+    return [sub1, sub2]
+
+
+@pytest.fixture(scope="function")
+def seed_products(db, seed_users, seed_sub_categories):
+    sub_categories = seed_sub_categories
+    seller = seed_users["seller"]
 
     p1 = Product(
-        name='Laptop',
-        slug='laptop',
+        name="Laptop",
+        slug="laptop",
         price=999.99,
         stock=10,
-        category_id=categories[0].id,
-        seller_id=seller.id
+        sub_category_id=sub_categories[0].id,
+        seller_id=seller.id,
     )
     p2 = Product(
-        name='T-Shirt',
-        slug='t-shirt',
+        name="T-Shirt",
+        slug="t-shirt",
         price=19.99,
         stock=50,
-        category_id=categories[1].id,
-        seller_id=seller.id
+        sub_category_id=sub_categories[1].id,
+        seller_id=seller.id,
     )
 
     db.session.add_all([p1, p2])
@@ -130,13 +160,12 @@ def seed_products(db, seed_users, seed_categories):
 
 
 def get_auth_token(client, email, password):
-    response = client.post('/api/v1/auth/login', json={
-        'email': email,
-        'password': password
-    })
+    response = client.post(
+        "/api/v1/auth/login", json={"email": email, "password": password}
+    )
     data = response.get_json()
-    return data.get('access_token')
+    return data.get("access_token")
 
 
 def auth_header(token):
-    return {'Authorization': f'Bearer {token}'}
+    return {"Authorization": f"Bearer {token}"}

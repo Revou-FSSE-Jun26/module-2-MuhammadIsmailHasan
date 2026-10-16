@@ -7,14 +7,13 @@ from app.schemas.category_schema import (
     CategoryQuerySchema,
     CategoryResponseSchema,
     CategoryDetailResponseSchema,
+    CategoryWithProductsSchema,
 )
-from app.schemas.product_schema import ProductQuerySchema, ProductResponseSchema
 from app.services.category_service import (
     CategoryService,
     CategoryNotFoundError,
     CategoryNameExistsError,
 )
-from app.services.product_service import ProductService
 from app.auth import roles_required
 from app.utils.http import make_response, paginate_meta
 
@@ -81,7 +80,7 @@ class CategoryListWithProducts(MethodView):
 
         return make_response(
             "get all categories with products success",
-            CategoryDetailResponseSchema(many=True).dump(paginated.items),
+            CategoryWithProductsSchema(many=True).dump(paginated.items),
             pagination=paginate_meta(paginated),
         )
 
@@ -126,23 +125,19 @@ class CategoryDetail(MethodView):
 
 @categories_blp.route("/<int:category_id>/products-by-category")
 class CategoryProductsByCategory(MethodView):
-    @categories_blp.arguments(ProductQuerySchema, location="query")
-    def get(self, query_params, category_id):
+    def get(self, category_id):
+        """Return the category nested as category -> sub_categories -> products.
+
+        Sub-categories and their products are returned in full (active only);
+        they are not separately paginated because a category typically has few
+        sub-categories.
+        """
         try:
-            CategoryService.get_by_id(category_id)
+            category = CategoryService.get_by_id(category_id)
         except CategoryNotFoundError as e:
             abort(404, message=str(e))
 
-        paginated = ProductService.get_by_category_id(
-            category_id,
-            sort_by=query_params["sort_by"],
-            order=query_params["order"],
-            page=query_params["page"],
-            limit=query_params["limit"],
-        )
-
         return make_response(
             "get products by category success",
-            ProductResponseSchema(many=True).dump(paginated.items),
-            pagination=paginate_meta(paginated),
+            CategoryDetailResponseSchema().dump(category),
         )

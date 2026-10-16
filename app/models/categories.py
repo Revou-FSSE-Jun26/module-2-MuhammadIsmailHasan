@@ -8,6 +8,7 @@ class Category(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
+    image = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=utcnow)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
@@ -16,6 +17,7 @@ class Category(db.Model):
         return {
             "id": self.id,
             "name": self.name,
+            "image": self.image,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "is_active": self.is_active,
         }
@@ -32,17 +34,33 @@ class Category(db.Model):
 
         return result
 
-    def to_dict_with_products(self):
-        result = self.to_dict_detail()
-        products = []
+    @property
+    def active_sub_categories(self):
+        """Active sub-categories of this category.
+
+        Used by the nested category -> sub_categories -> products schema so the
+        tree only exposes active children.
+        """
+        return [sub for sub in self.sub_categories if sub.is_active]
+
+    @property
+    def products(self):
+        """Active products reached through this category's active sub-categories.
+
+        Exposed as an attribute so CategoryDetailResponseSchema (which has a
+        `products` field) can serialize the product-by-category chain.
+        """
+        gathered = []
         for sub_category in self.sub_categories:
             if not sub_category.is_active:
                 continue
-            products.extend(
-                product.to_dict()
-                for product in sub_category.products
-                if product.is_active
+            gathered.extend(
+                product for product in sub_category.products if product.is_active
             )
-        result["products"] = products
+        return gathered
+
+    def to_dict_with_products(self):
+        result = self.to_dict_detail()
+        result["products"] = [product.to_dict() for product in self.products]
 
         return result
