@@ -25,6 +25,7 @@ coverage.xml
 .env
 .env.docker
 !.env.example
+.env.production
 
 
 # =======
