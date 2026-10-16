@@ -3,10 +3,8 @@ from app.utils.timezone import utcnow
 
 
 class Category(db.Model):
-    __tablename__ = 'categories'
-    __table_args__ = (
-        db.UniqueConstraint('name', name='uq_categories_name'),
-    )
+    __tablename__ = "categories"
+    __table_args__ = (db.UniqueConstraint("name", name="uq_categories_name"),)
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
@@ -14,25 +12,37 @@ class Category(db.Model):
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
-    products = db.relationship('Product', backref='category', lazy=True)
-
     def to_dict(self):
         return {
             "id": self.id,
             "name": self.name,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "is_active": self.is_active
+            "is_active": self.is_active,
         }
 
     def to_dict_detail(self):
         result = self.to_dict()
-        result['created_at'] = self.created_at.isoformat() if self.created_at else None
-        result['is_active'] = self.is_active
+        result["created_at"] = self.created_at.isoformat() if self.created_at else None
+        result["is_active"] = self.is_active
+        result["sub_categories"] = [
+            sub_category.to_dict()
+            for sub_category in self.sub_categories
+            if sub_category.is_active
+        ]
 
         return result
 
     def to_dict_with_products(self):
         result = self.to_dict_detail()
-        result['products'] = [product.to_dict() for product in self.products]
+        products = []
+        for sub_category in self.sub_categories:
+            if not sub_category.is_active:
+                continue
+            products.extend(
+                product.to_dict()
+                for product in sub_category.products
+                if product.is_active
+            )
+        result["products"] = products
 
         return result

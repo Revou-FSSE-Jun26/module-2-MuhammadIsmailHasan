@@ -5,17 +5,17 @@ from app.utils.text import strip_or_none
 
 class ProductQuerySchema(Schema):
     name = fields.String(load_default=None)
-    category_id = fields.Integer(load_default=None)
+    sub_category_id = fields.Integer(load_default=None)
     seller_id = fields.Integer(load_default=None)
     min_price = fields.Float(load_default=None)
     max_price = fields.Float(load_default=None)
     sort_by = fields.String(
-        load_default='id',
-        validate=validate.OneOf(['id', 'name', 'price', 'created_at']),
+        load_default="id",
+        validate=validate.OneOf(["id", "name", "price", "created_at"]),
     )
     order = fields.String(
-        load_default='asc',
-        validate=validate.OneOf(['asc', 'desc']),
+        load_default="asc",
+        validate=validate.OneOf(["asc", "desc"]),
     )
     page = fields.Integer(load_default=1, validate=validate.Range(min=1))
     limit = fields.Integer(load_default=10, validate=validate.Range(min=1, max=100))
@@ -24,40 +24,50 @@ class ProductQuerySchema(Schema):
 class CreateProductSchema(Schema):
     name = fields.String(
         required=True,
-        validate=validate.Length(min=1, max=255, error="name cannot exceed 255 characters"),
+        validate=validate.Length(
+            min=1, max=255, error="name cannot exceed 255 characters"
+        ),
         error_messages={"required": "name is required", "null": "name cannot be empty"},
     )
     price = fields.Float(
         required=True,
-        error_messages={"required": "price is required", "invalid": "price must be a number"},
+        error_messages={
+            "required": "price is required",
+            "invalid": "price must be a number",
+        },
     )
     stock = fields.Integer(
         required=True,
-        error_messages={"required": "stock is required", "invalid": "stock must be number"},
+        error_messages={
+            "required": "stock is required",
+            "invalid": "stock must be number",
+        },
     )
     description = fields.String(
         load_default=None,
-        validate=validate.Length(max=1000, error="description cannot exceed 1000 characters"),
+        validate=validate.Length(
+            max=1000, error="description cannot exceed 1000 characters"
+        ),
     )
-    category_id = fields.Integer(
+    sub_category_id = fields.Integer(
         load_default=None,
-        error_messages={"invalid": "category_id must be a number"},
+        error_messages={"invalid": "sub_category_id must be a number"},
     )
 
     @pre_load
     def strip_name(self, data, **kwargs):
-        if 'name' in data:
-            data['name'] = strip_or_none(data['name'])
+        if "name" in data:
+            data["name"] = strip_or_none(data["name"])
         return data
 
-    @validates('price')
+    @validates("price")
     def validate_price(self, value, **kwargs):
         if value < 0:
             raise ValidationError("price cannot be negative")
         if value > 10**11:
             raise ValidationError("price cannot exceed 11 digits number")
 
-    @validates('stock')
+    @validates("stock")
     def validate_stock(self, value, **kwargs):
         if not isinstance(value, int) or isinstance(value, bool):
             raise ValidationError("stock must be number")
@@ -66,7 +76,9 @@ class CreateProductSchema(Schema):
 class UpdateProductSchema(Schema):
     name = fields.String(
         load_default=None,
-        validate=validate.Length(min=1, max=255, error="name cannot exceed 255 characters"),
+        validate=validate.Length(
+            min=1, max=255, error="name cannot exceed 255 characters"
+        ),
     )
     price = fields.Float(
         load_default=None,
@@ -78,20 +90,22 @@ class UpdateProductSchema(Schema):
     )
     description = fields.String(
         load_default=None,
-        validate=validate.Length(max=1000, error="description cannot exceed 1000 characters"),
+        validate=validate.Length(
+            max=1000, error="description cannot exceed 1000 characters"
+        ),
     )
-    category_id = fields.Integer(
+    sub_category_id = fields.Integer(
         load_default=None,
-        error_messages={"invalid": "category_id must be a number"},
+        error_messages={"invalid": "sub_category_id must be a number"},
     )
 
     @pre_load
     def strip_name(self, data, **kwargs):
-        if 'name' in data:
-            data['name'] = strip_or_none(data['name'])
+        if "name" in data:
+            data["name"] = strip_or_none(data["name"])
         return data
 
-    @validates('price')
+    @validates("price")
     def validate_price(self, value, **kwargs):
         if value is None:
             return
@@ -100,7 +114,7 @@ class UpdateProductSchema(Schema):
         if value > 10**11:
             raise ValidationError("price cannot exceed 11 digits number")
 
-    @validates('stock')
+    @validates("stock")
     def validate_stock(self, value, **kwargs):
         if value is None:
             return
@@ -114,7 +128,7 @@ class ProductImageResponseSchema(Schema):
     url = fields.String()
     order = fields.Integer()
     is_active = fields.Boolean()
-    created_at = fields.DateTime(format='iso')
+    created_at = fields.DateTime(format="iso")
 
 
 class ProductResponseSchema(Schema):
@@ -123,7 +137,7 @@ class ProductResponseSchema(Schema):
     slug = fields.String()
     price = fields.Float()
     stock = fields.Integer()
-    image = fields.Method('get_primary_image')
+    image = fields.Method("get_primary_image")
 
     def get_primary_image(self, obj):
         primary = obj.primary_image
@@ -133,8 +147,15 @@ class ProductResponseSchema(Schema):
 class CategoryResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
-    created_at = fields.DateTime(format='iso')
+    created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
+
+
+class SubCategoryInProductSchema(Schema):
+    id = fields.Integer()
+    name = fields.String()
+    category_id = fields.Integer(allow_none=True)
+    category = fields.Nested(CategoryResponseSchema, allow_none=True)
 
 
 class ProductDetailResponseSchema(Schema):
@@ -145,10 +166,10 @@ class ProductDetailResponseSchema(Schema):
     stock = fields.Integer()
     description = fields.String()
     seller_id = fields.Integer(allow_none=True)
-    created_at = fields.DateTime(format='iso')
+    created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
-    category = fields.Nested(CategoryResponseSchema, allow_none=True)
-    images = fields.Method('get_images')
+    sub_category = fields.Nested(SubCategoryInProductSchema, allow_none=True)
+    images = fields.Method("get_images")
 
     def get_images(self, obj):
         return [img.to_dict() for img in obj.active_images]

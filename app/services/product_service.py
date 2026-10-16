@@ -1,5 +1,5 @@
 from app.repositories.product_repository import ProductRepository
-from app.models.categories import Category
+from app.models.sub_categories import SubCategory
 from app.validation import ACTIVE_ORDER_STATUSES
 from app.utils.slug import slugify
 
@@ -12,14 +12,17 @@ class CategoryNotFoundError(Exception):
     pass
 
 
+class SubCategoryNotFoundError(Exception):
+    pass
+
+
 class ProductHasActiveOrdersError(Exception):
     pass
 
 
 class ProductService:
-
     @staticmethod
-    def get_all(filters=None, sort_by='id', order='asc', page=1, limit=10):
+    def get_all(filters=None, sort_by="id", order="asc", page=1, limit=10):
         return ProductRepository.get_all(
             filters=filters,
             sort_by=sort_by,
@@ -48,20 +51,20 @@ class ProductService:
         candidate = base
         suffix = 2
         while ProductRepository.slug_exists(candidate):
-            candidate = f'{base}-{suffix}'
+            candidate = f"{base}-{suffix}"
             suffix += 1
         return candidate
 
     @staticmethod
     def create(data, seller_id=None):
-        if data.get('category_id'):
-            category = Category.query.filter_by(
-                id=data['category_id'], is_active=True
+        if data.get("sub_category_id"):
+            sub_category = SubCategory.query.filter_by(
+                id=data["sub_category_id"], is_active=True
             ).first()
-            if not category:
-                raise CategoryNotFoundError("category id not found")
+            if not sub_category:
+                raise SubCategoryNotFoundError("sub category id not found")
 
-        slug = ProductService._generate_unique_slug(data['name'])
+        slug = ProductService._generate_unique_slug(data["name"])
 
         return ProductRepository.create(data, seller_id=seller_id, slug=slug)
 
@@ -76,12 +79,12 @@ class ProductService:
         if not update_data:
             return product
 
-        if 'category_id' in update_data:
-            category = Category.query.filter_by(
-                id=update_data['category_id'], is_active=True
+        if "sub_category_id" in update_data:
+            sub_category = SubCategory.query.filter_by(
+                id=update_data["sub_category_id"], is_active=True
             ).first()
-            if not category:
-                raise CategoryNotFoundError("category id not found")
+            if not sub_category:
+                raise SubCategoryNotFoundError("sub category id not found")
 
         return ProductRepository.update(product, update_data)
 
@@ -97,3 +100,25 @@ class ProductService:
             )
 
         ProductRepository.soft_delete(product)
+
+    @staticmethod
+    def get_by_sub_category_id(
+        sub_category_id, sort_by="id", order="asc", page=1, limit=10
+    ):
+        return ProductRepository.get_by_sub_category_id(
+            sub_category_id,
+            sort_by=sort_by,
+            order=order,
+            page=page,
+            limit=limit,
+        )
+
+    @staticmethod
+    def get_by_category_id(category_id, sort_by="id", order="asc", page=1, limit=10):
+        return ProductRepository.get_by_category_id(
+            category_id,
+            sort_by=sort_by,
+            order=order,
+            page=page,
+            limit=limit,
+        )
