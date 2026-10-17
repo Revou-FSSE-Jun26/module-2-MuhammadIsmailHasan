@@ -1,4 +1,8 @@
 from app.repositories.sub_category_repository import SubCategoryRepository
+from app.repositories.product_preview_repository import (
+    DEFAULT_PRODUCTS_LIMIT,
+    ProductPreviewRepository,
+)
 from app.repositories.category_repository import CategoryRepository
 from app.services.category_service import CategoryNotFoundError
 
@@ -85,3 +89,13 @@ class SubCategoryService:
             raise SubCategoryNotFoundError("sub category not found")
 
         SubCategoryRepository.soft_delete(sub_category)
+
+
+def attach_previews(sub_categories, limit=DEFAULT_PRODUCTS_LIMIT):
+    items = sub_categories if isinstance(sub_categories, list) else [sub_categories]
+    grouped = ProductPreviewRepository.by_sub_category(
+        [sub.id for sub in items], limit=limit
+    )
+    for sub in items:
+        sub.preview_products = grouped.get(sub.id, [])
+    return sub_categories

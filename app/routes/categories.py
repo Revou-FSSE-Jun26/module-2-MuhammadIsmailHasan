@@ -16,6 +16,7 @@ from app.services.category_service import (
 )
 from app.auth import roles_required
 from app.utils.http import make_response, paginate_meta
+from app.schemas.preview import ProductsLimitQuerySchema
 
 categories_blp = Blueprint(
     "categories",
@@ -78,6 +79,10 @@ class CategoryListWithProducts(MethodView):
             limit=query_params["limit"],
         )
 
+        CategoryService.attach_flat_previews(
+            paginated.items, limit=query_params["products_limit"]
+        )
+
         return make_response(
             "get all categories with products success",
             CategoryWithProductsSchema(many=True).dump(paginated.items),
@@ -87,11 +92,16 @@ class CategoryListWithProducts(MethodView):
 
 @categories_blp.route("/<int:category_id>")
 class CategoryDetail(MethodView):
-    def get(self, category_id):
+    @categories_blp.arguments(ProductsLimitQuerySchema, location="query")
+    def get(self, query_params, category_id):
         try:
             category = CategoryService.get_by_id(category_id)
         except CategoryNotFoundError as e:
             abort(404, message=str(e))
+
+        CategoryService.attach_nested_previews(
+            category, limit=query_params["products_limit"]
+        )
 
         return make_response(
             "success get category",

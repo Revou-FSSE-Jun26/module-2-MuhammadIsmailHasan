@@ -242,6 +242,22 @@ See `docs/payment-testing-guide.md` for a full local setup and test walkthrough.
   removed — the row can be restored. Reclaiming storage is a separate
   housekeeping job.
 
+**Nested product previews**
+
+- The four endpoints that nest products (`/categories/products`,
+  `/categories/<id>`, `/sub-categories/products`, `/sub-categories/<id>`)
+  return a **preview**, not the full catalogue: at most `products_limit`
+  products per group, defaulting to **10** and capped at 100. Pass
+  `?products_limit=0` to get the tree with no products at all.
+- Only the outer list is paginated (`page` / `limit`); the nested products are
+  never paginated, which is why they are capped instead. For a full, paginated
+  product list use `GET /products/?sub_category_id=<id>&page=<n>`.
+- The cap is applied in SQL with a window function, so the extra products are
+  never loaded into memory, and each preview eager-loads its images in one
+  query. Before this, a single request to `/categories/products` issued **2,218
+  queries** and serialised **2,200 products** — enough to exhaust a small
+  container's memory.
+
 **Cart**
 
 - One active cart per buyer, created lazily on first add. A cart item stores
@@ -463,11 +479,17 @@ All routes are prefixed with `/api/v1`; protected routes need
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
 | GET | `/categories/` | List categories | any role |
-| GET | `/categories/products` | Categories with their products | any role |
+| GET | `/categories/products` | Categories with a product preview | any role |
 | POST | `/categories/` | Create a category | seller, admin |
-| GET | `/categories/<id>` | Category with products | any role |
+| GET | `/categories/<id>` | Category → sub-categories → product preview | any role |
 | PUT | `/categories/<id>` | Update a category | seller, admin |
 | DELETE | `/categories/<id>` | Soft-delete a category | seller, admin |
+| GET | `/sub-categories/` | List sub-categories | any role |
+| GET | `/sub-categories/products` | Sub-categories with a product preview | any role |
+| POST | `/sub-categories/` | Create a sub-category | seller, admin |
+| GET | `/sub-categories/<id>` | Sub-category with a product preview | any role |
+| PUT | `/sub-categories/<id>` | Update a sub-category | seller, admin |
+| DELETE | `/sub-categories/<id>` | Soft-delete a sub-category | seller, admin |
 | GET | `/products/` | List products (filter, sort, paginate) | any role |
 | POST | `/products/` | Create a product | seller, admin |
 | GET | `/products/<id>` | Product by ID | any role |

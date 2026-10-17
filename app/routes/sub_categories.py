@@ -17,6 +17,8 @@ from app.services.sub_category_service import (
 from app.services.category_service import CategoryNotFoundError
 from app.auth import roles_required
 from app.utils.http import make_response, paginate_meta
+from app.schemas.preview import ProductsLimitQuerySchema
+from app.services.sub_category_service import attach_previews
 
 sub_categories_blp = Blueprint(
     "sub_categories",
@@ -68,11 +70,14 @@ class SubCategoryList(MethodView):
 
 @sub_categories_blp.route("/<int:sub_category_id>")
 class SubCategoryDetail(MethodView):
-    def get(self, sub_category_id):
+    @sub_categories_blp.arguments(ProductsLimitQuerySchema, location="query")
+    def get(self, query_params, sub_category_id):
         try:
             sub_category = SubCategoryService.get_by_id(sub_category_id)
         except SubCategoryNotFoundError as e:
             abort(404, message=str(e))
+
+        attach_previews(sub_category, limit=query_params["products_limit"])
 
         return make_response(
             "success get sub category",
@@ -127,6 +132,8 @@ class SubCategoryListWithProducts(MethodView):
             page=query_params["page"],
             limit=query_params["limit"],
         )
+
+        attach_previews(paginated.items, limit=query_params["products_limit"])
 
         return make_response(
             "get all sub categories with products success",

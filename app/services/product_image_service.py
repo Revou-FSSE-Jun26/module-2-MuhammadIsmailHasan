@@ -62,12 +62,6 @@ class ProductImageService:
 
     @staticmethod
     def create_from_upload(product_id, file_storage, user_id=None, role=None):
-        """Upload ke object storage lalu simpan key-nya.
-
-        Upload dilakukan lebih dulu supaya tidak ada baris yang menunjuk ke
-        objek yang gagal naik. Kalau insert gagal setelah upload berhasil,
-        objeknya dihapus lagi supaya tidak jadi orphan.
-        """
         product = ProductImageService._get_product_or_404(product_id)
         ProductImageService._authorize(product, user_id, role)
 

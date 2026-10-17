@@ -39,7 +39,6 @@ class InvalidImageError(Exception):
 
 
 def detect_image_extension(stream):
-    """Ekstensi dari magic bytes, bukan dari nama file yang dikirim client."""
     head = stream.read(16)
     stream.seek(0)
 
@@ -52,11 +51,6 @@ def detect_image_extension(stream):
 
 
 def validate_image_upload(file_storage, max_bytes):
-    """Pastikan upload benar-benar gambar dan ukurannya wajar.
-
-    Mengembalikan (extension, content_type). Nama file dan Content-Type dari
-    client tidak dipercaya; keduanya bisa dipalsukan.
-    """
     if file_storage is None or not file_storage.filename:
         raise InvalidImageError("file is required")
 

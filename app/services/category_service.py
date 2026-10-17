@@ -1,4 +1,8 @@
 from app.repositories.category_repository import CategoryRepository
+from app.repositories.product_preview_repository import (
+    DEFAULT_PRODUCTS_LIMIT,
+    ProductPreviewRepository,
+)
 
 
 class CategoryNotFoundError(Exception):
@@ -26,6 +30,25 @@ class CategoryService:
         category = CategoryRepository.get_by_id(category_id)
         if not category:
             raise CategoryNotFoundError("category not found")
+        return category
+
+    @staticmethod
+    def attach_flat_previews(categories, limit=DEFAULT_PRODUCTS_LIMIT):
+        grouped = ProductPreviewRepository.by_category(
+            [category.id for category in categories], limit=limit
+        )
+        for category in categories:
+            category.preview_products = grouped.get(category.id, [])
+        return categories
+
+    @staticmethod
+    def attach_nested_previews(category, limit=DEFAULT_PRODUCTS_LIMIT):
+        sub_categories = category.active_sub_categories
+        grouped = ProductPreviewRepository.by_sub_category(
+            [sub.id for sub in sub_categories], limit=limit
+        )
+        for sub in sub_categories:
+            sub.preview_products = grouped.get(sub.id, [])
         return category
 
     @staticmethod

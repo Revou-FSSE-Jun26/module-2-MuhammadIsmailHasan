@@ -47,7 +47,6 @@ def upload(stream, key, content_type):
 
 
 def delete(key):
-    """Dipakai sebagai kompensasi kalau insert database gagal setelah upload."""
     try:
         _client().delete_object(Bucket=_bucket(), Key=key)
     except (BotoCoreError, ClientError) as error:

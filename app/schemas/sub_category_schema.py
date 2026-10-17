@@ -4,6 +4,8 @@ from app.utils.text import strip_or_none
 from app.schemas.category_schema import CategoryResponseSchema
 from app.schemas.product_schema import ProductResponseSchema
 from app.schemas.fields import ImageUrlField
+from app.schemas.preview import preview_products
+from app.repositories.product_preview_repository import DEFAULT_PRODUCTS_LIMIT
 
 
 class SubCategoryQuerySchema(Schema):
@@ -19,6 +21,9 @@ class SubCategoryQuerySchema(Schema):
     )
     page = fields.Integer(load_default=1, validate=validate.Range(min=1))
     limit = fields.Integer(load_default=10, validate=validate.Range(min=1, max=100))
+    products_limit = fields.Integer(
+        load_default=DEFAULT_PRODUCTS_LIMIT, validate=validate.Range(min=0, max=100)
+    )
 
 
 class CreateSubCategorySchema(Schema):
@@ -90,6 +95,7 @@ class SubCategoryDetailResponseSchema(Schema):
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
     category = fields.Nested(CategoryResponseSchema, allow_none=True)
-    products = fields.List(
-        fields.Nested(ProductResponseSchema), attribute="active_products"
-    )
+    products = fields.Method("get_products")
+
+    def get_products(self, obj):
+        return ProductResponseSchema(many=True).dump(preview_products(obj))

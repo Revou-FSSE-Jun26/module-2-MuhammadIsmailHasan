@@ -340,9 +340,11 @@ good enough without running a frontend. Open
   produce identical data
 - If `seeders/data/` is empty, `seed_products()` stops with a message telling
   you to run the crawler first
-- `GET /api/v1/products/` issues one `product_images` query per product (N+1).
-  With 3–5 images per product this is the obvious first candidate for Redis
-  caching
+- `GET /api/v1/products/` still issues one `product_images` query per product
+  (N+1) because each row resolves its primary image. At `limit=10` that is 12
+  queries per page, so it is tolerable — but it is the obvious first candidate
+  for Redis caching. The nested category endpoints no longer have this problem:
+  they cap the products per group and eager-load the images
 - The list endpoint needs its trailing slash — `/api/v1/products` returns a 308
   redirect
 
