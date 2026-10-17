@@ -33,6 +33,12 @@ class BaseConfig:
     MIDTRANS_IS_PRODUCTION = os.getenv('MIDTRANS_IS_PRODUCTION', 'false').lower() == 'true'
     MIDTRANS_EXPIRY_MINUTES = int(os.getenv('MIDTRANS_EXPIRY_MINUTES', '1440'))
 
+    # ─── Product images ───────────────────────────────────────────────────────
+    # Prefix URL gambar produk. Dipakai seeder (seeders/scraped.py) saat
+    # membangun URL dari nama file hasil crawl. Default melayani dari
+    # app/static/products lewat static folder Flask.
+    IMAGE_BASE_URL = os.getenv('IMAGE_BASE_URL', '/static/images')
+
     # ─── Logging ──────────────────────────────────────────────────────────────
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_TO_FILE = os.getenv('LOG_TO_FILE', 'true').lower() == 'true'

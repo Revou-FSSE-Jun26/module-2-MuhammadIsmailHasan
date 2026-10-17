@@ -56,3 +56,9 @@ jira/.env.jira
 !jira/.env.jira.example
 jira/.jira-import-state.json
 jira/02-stories-linked.csv
+
+
+# =======
+# Gambar produk hasil crawl (di-generate seeders/scraper/tokopedia.py)
+# =======
+app/static/images/

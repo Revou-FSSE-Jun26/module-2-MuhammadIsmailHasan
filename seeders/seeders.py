@@ -20,6 +20,14 @@ from app.models import (
     Payment,
 )
 from app.utils.slug import slugify
+from seeders.scraper.catalog import (
+    CATALOG,
+    CATEGORIES,
+    EMPTY_CATEGORIES,
+    category_image_key,
+    sub_category_image_key,
+)
+from seeders.scraped import build_rows, load_products, resolve_image_url
 import bcrypt
 from datetime import timedelta
 from decimal import Decimal
@@ -54,26 +62,8 @@ def clear_tables():
 def seed_categories():
     """Seed kategori produk"""
     categories = [
-        Category(
-            name="Electronics",
-            image="https://cdn.example.com/categories/electronics.jpg",
-        ),
-        Category(
-            name="Clothing",
-            image="https://cdn.example.com/categories/clothing.jpg",
-        ),
-        Category(
-            name="Food & Beverages",
-            image="https://cdn.example.com/categories/food-and-beverages.jpg",
-        ),
-        Category(
-            name="Books",
-            image="https://cdn.example.com/categories/books.jpg",
-        ),
-        Category(
-            name="Sports",
-            image="https://cdn.example.com/categories/sports.jpg",
-        ),
+        Category(name=name, image=resolve_image_url(category_image_key(slugify(name))))
+        for name in CATEGORIES
     ]
 
     try:
@@ -88,30 +78,22 @@ def seed_categories():
 
 
 def seed_sub_categories():
-    """Seed sub-kategori produk (many-to-one ke categories)"""
-    sub_categories_map = {
-        "Electronics": ["Laptops", "Accessories"],
-        "Clothing": ["Men", "Women"],
-        "Food & Beverages": ["Coffee", "Tea"],
-        "Books": ["Fiction", "Non-Fiction"],
-        "Sports": ["Outdoor", "Fitness"],
-    }
-
+    """Seed sub-kategori dari CATALOG"""
     sub_categories = []
     try:
-        for category_name, sub_names in sub_categories_map.items():
+        for category_name, sub_name, _path, _filename in CATALOG:
+            if category_name in EMPTY_CATEGORIES:
+                continue
             category = Category.query.filter_by(name=category_name).first()
             if not category:
                 continue
-            for sub_name in sub_names:
-                sub_slug = slugify(sub_name)
-                sub_categories.append(
-                    SubCategory(
-                        name=sub_name,
-                        category_id=category.id,
-                        image=f"https://cdn.example.com/sub-categories/{sub_slug}.jpg",
-                    )
+            sub_categories.append(
+                SubCategory(
+                    name=sub_name,
+                    category_id=category.id,
+                    image=resolve_image_url(sub_category_image_key(slugify(sub_name))),
                 )
+            )
 
         db.session.add_all(sub_categories)
         db.session.commit()
@@ -184,147 +166,90 @@ def seed_users():
 
 
 def seed_products():
-    """Seed produk untuk testing"""
-    laptops_sub = SubCategory.query.filter_by(name="Laptops").first()
-    accessories_sub = SubCategory.query.filter_by(name="Accessories").first()
-    men_sub = SubCategory.query.filter_by(name="Men").first()
-    coffee_sub = SubCategory.query.filter_by(name="Coffee").first()
-    tea_sub = SubCategory.query.filter_by(name="Tea").first()
+    """Seed produk dari hasil crawl di seeders/data/"""
+    grouped = load_products()
+    if not grouped:
+        print(
+            "Cannot seed products: seeders/data/ masih kosong. "
+            "Jalankan dulu: python -m seeders.scraper.tokopedia"
+        )
+        return []
 
-    seller_alice = User.query.filter_by(username="alice_brown").first()
-    seller_charlie = User.query.filter_by(username="charlie_davis").first()
-    alice_id = seller_alice.id if seller_alice else None
-    charlie_id = seller_charlie.id if seller_charlie else None
-
-    products_data = [
-        {
-            "sub_category_id": laptops_sub.id if laptops_sub else None,
-            "seller_id": alice_id,
-            "name": "Laptop ASUS Vivobook 14",
-            "description": "Laptop ringan dengan RAM 16GB dan SSD 512GB",
-            "price": 8499000,
-            "stock": 15,
-        },
-        {
-            "sub_category_id": accessories_sub.id if accessories_sub else None,
-            "seller_id": alice_id,
-            "name": "Mouse Wireless Logitech",
-            "description": "Mouse wireless ergonomis dengan baterai tahan lama",
-            "price": 185000,
-            "stock": 50,
-        },
-        {
-            "sub_category_id": accessories_sub.id if accessories_sub else None,
-            "seller_id": alice_id,
-            "name": "Kabel USB-C 2 Meter",
-            "description": "Kabel USB-C untuk charging dan transfer data",
-            "price": 45000,
-            "stock": 100,
-        },
-        {
-            "sub_category_id": accessories_sub.id if accessories_sub else None,
-            "seller_id": alice_id,
-            "name": "Monitor LG 27 Inch 4K",
-            "description": "Monitor IPS 4K dengan konektivitas USB-C",
-            "price": 3750000,
-            "stock": 10,
-        },
-        {
-            "sub_category_id": accessories_sub.id if accessories_sub else None,
-            "seller_id": alice_id,
-            "name": "Keyboard Mekanik RGB",
-            "description": "Keyboard mekanik dengan lampu RGB dan blue switch",
-            "price": 649000,
-            "stock": 25,
-        },
-        {
-            "sub_category_id": men_sub.id if men_sub else None,
-            "seller_id": charlie_id,
-            "name": "Kaos Katun Combed 30s",
-            "description": "Kaos katun combed 30s, tersedia berbagai warna",
-            "price": 75000,
-            "stock": 75,
-        },
-        {
-            "sub_category_id": men_sub.id if men_sub else None,
-            "seller_id": charlie_id,
-            "name": "Celana Jeans Denim",
-            "description": "Celana jeans denim klasik dengan potongan nyaman",
-            "price": 249000,
-            "stock": 40,
-        },
-        {
-            "sub_category_id": men_sub.id if men_sub else None,
-            "seller_id": charlie_id,
-            "name": "Jaket Hoodie Fleece",
-            "description": "Jaket hoodie bahan fleece, hangat dan nyaman",
-            "price": 189000,
-            "stock": 30,
-        },
-        {
-            "sub_category_id": coffee_sub.id if coffee_sub else None,
-            "seller_id": charlie_id,
-            "name": "Kopi Arabika Gayo 1kg",
-            "description": "Biji kopi arabika Gayo premium, kemasan 1kg",
-            "price": 135000,
-            "stock": 60,
-        },
-        {
-            "sub_category_id": tea_sub.id if tea_sub else None,
-            "seller_id": charlie_id,
-            "name": "Teh Hijau Celup 50 Kantong",
-            "description": "Teh hijau organik, isi 50 kantong celup",
-            "price": 28000,
-            "stock": 80,
-        },
+    sub_category_ids = {
+        sub_category.name: sub_category.id for sub_category in SubCategory.query.all()
+    }
+    seller_ids = [
+        user.id for user in User.query.filter_by(role="seller").order_by(User.id).all()
     ]
 
-    products = []
-    try:
-        for product_data in products_data:
-            product = Product(
-                sub_category_id=product_data["sub_category_id"],
-                seller_id=product_data["seller_id"],
-                name=product_data["name"],
-                slug=slugify(product_data["name"]),
-                description=product_data["description"],
-                price=product_data["price"],
-                stock=product_data["stock"],
-            )
-            products.append(product)
+    rows = build_rows(grouped, sub_category_ids, seller_ids)
+    if not rows:
+        print("Cannot seed products: tidak ada sub-category yang cocok")
+        return []
 
-        db.session.add_all(products)
+    try:
+        created_at = utcnow()
+        db.session.bulk_insert_mappings(
+            Product,
+            [
+                {
+                    "sub_category_id": row["sub_category_id"],
+                    "seller_id": row["seller_id"],
+                    "name": row["name"],
+                    "slug": row["slug"],
+                    "description": row["description"],
+                    "price": row["price"],
+                    "stock": row["stock"],
+                    "is_active": True,
+                    "created_at": created_at,
+                }
+                for row in rows
+            ],
+        )
         db.session.commit()
-        print(f"Created {len(products)} products")
-        return products
+
+        ids_by_slug = dict(db.session.query(Product.slug, Product.id).all())
+        for row in rows:
+            row["id"] = ids_by_slug.get(row["slug"])
+
+        out_of_stock = sum(1 for row in rows if row["stock"] == 0)
+        print(
+            f"Created {len(rows)} products "
+            f"({out_of_stock} dengan stock 0) "
+            f"di {len(grouped)} sub categories"
+        )
+        return rows
     except Exception as e:
         db.session.rollback()
         print(f"Error seeding products: {e}")
         raise
 
 
-def seed_product_images():
-    products = Product.query.order_by(Product.id).all()
+def seed_product_images(rows=None):
+    """Seed gambar produk, order 0 = gambar default"""
+    if rows is None:
+        print("Cannot seed product images: butuh hasil dari seed_products()")
+        return []
 
-    if not products:
-        print("Cannot seed product images: no products found")
-        return
+    images = [
+        {
+            "product_id": row["id"],
+            "url": url,
+            "order": order,
+            "is_active": True,
+            "created_at": utcnow(),
+        }
+        for row in rows
+        if row.get("id")
+        for order, url in enumerate(row["images"])
+    ]
 
-    images = []
+    if not images:
+        print("Cannot seed product images: produk hasil crawl tidak punya gambar")
+        return []
+
     try:
-        for index, product in enumerate(products):
-            slug = product.slug or slugify(product.name)
-            image_count = 3 if index < 3 else 1
-            for order in range(image_count):
-                images.append(
-                    ProductImage(
-                        product_id=product.id,
-                        url=f"https://cdn.example.com/products/{slug}-{order + 1}.jpg",
-                        order=order,
-                    )
-                )
-
-        db.session.add_all(images)
+        db.session.bulk_insert_mappings(ProductImage, images)
         db.session.commit()
         print(f"Created {len(images)} product images")
         return images
@@ -338,7 +263,9 @@ def seed_orders():
     """Seed orders dengan berbagai status untuk testing"""
     buyer = User.query.filter_by(username="jane_smith").first()
     buyer2 = User.query.filter_by(username="bob_wilson").first()
-    products = Product.query.limit(5).all()
+    products = (
+        Product.query.filter(Product.stock > 3).order_by(Product.id).limit(5).all()
+    )
 
     if not buyer or not buyer2 or len(products) < 3:
         print("Cannot seed orders: missing users or products")
@@ -476,10 +403,14 @@ def seed_carts():
     charlie = User.query.filter_by(username="charlie_davis").first()
 
     alice_product = (
-        Product.query.filter_by(seller_id=alice.id).first() if alice else None
+        Product.query.filter(Product.seller_id == alice.id, Product.stock > 3).first()
+        if alice
+        else None
     )
     charlie_product = (
-        Product.query.filter_by(seller_id=charlie.id).first() if charlie else None
+        Product.query.filter(Product.seller_id == charlie.id, Product.stock > 3).first()
+        if charlie
+        else None
     )
 
     picks = [p for p in (alice_product, charlie_product) if p is not None]
@@ -620,8 +551,8 @@ def seed_test_data():
             seed_users()
             seed_user_profiles()
             seed_user_addresses()
-            seed_products()
-            seed_product_images()
+            product_rows = seed_products()
+            seed_product_images(product_rows)
             seed_orders()
             seed_carts()
 
