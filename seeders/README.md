@@ -158,13 +158,14 @@ anything else you later store in this bucket private.
 aws configure set default.s3.max_concurrent_requests 32
 
 aws s3 sync app/static/images/ s3://revoshop-images/ \
-  --exclude "review.html" \
+  --exclude "review.html" --exclude "*.DS_Store" --exclude "Thumbs.db" \
   --cache-control "public, max-age=31536000, immutable"
 ```
 
 The local folder layout mirrors the bucket, so one `sync` covers products,
 categories and sub-categories. It is restartable: re-running only uploads what
-is missing. Verify one object:
+is missing. The excludes matter: `sync` copies every file it finds, and macOS
+drops a `.DS_Store` into any folder you open in Finder. Verify one object:
 
 ```bash
 curl -sI https://revoshop-images.s3.ap-southeast-1.amazonaws.com/categories/books.jpg | head -3

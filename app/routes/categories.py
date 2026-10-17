@@ -121,23 +121,3 @@ class CategoryDetail(MethodView):
             abort(404, message=str(e))
 
         return make_response("success delete category")
-
-
-@categories_blp.route("/<int:category_id>/products-by-category")
-class CategoryProductsByCategory(MethodView):
-    def get(self, category_id):
-        """Return the category nested as category -> sub_categories -> products.
-
-        Sub-categories and their products are returned in full (active only);
-        they are not separately paginated because a category typically has few
-        sub-categories.
-        """
-        try:
-            category = CategoryService.get_by_id(category_id)
-        except CategoryNotFoundError as e:
-            abort(404, message=str(e))
-
-        return make_response(
-            "get products by category success",
-            CategoryDetailResponseSchema().dump(category),
-        )

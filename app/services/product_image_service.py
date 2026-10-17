@@ -1,4 +1,9 @@
+from flask import current_app
+
+from app.integrations import s3
+from app.integrations.s3 import ImageStorageError
 from app.repositories.product_image_repository import ProductImageRepository
+from app.utils.images import validate_image_upload
 
 
 class ProductNotFoundError(Exception):
@@ -54,6 +59,37 @@ class ProductImageService:
             url=data['url'],
             order=next_order,
         )
+
+    @staticmethod
+    def create_from_upload(product_id, file_storage, user_id=None, role=None):
+        """Upload ke object storage lalu simpan key-nya.
+
+        Upload dilakukan lebih dulu supaya tidak ada baris yang menunjuk ke
+        objek yang gagal naik. Kalau insert gagal setelah upload berhasil,
+        objeknya dihapus lagi supaya tidak jadi orphan.
+        """
+        product = ProductImageService._get_product_or_404(product_id)
+        ProductImageService._authorize(product, user_id, role)
+
+        if not s3.is_configured():
+            raise ImageStorageError("image storage is not configured")
+
+        extension, content_type = validate_image_upload(
+            file_storage, current_app.config["MAX_IMAGE_UPLOAD_BYTES"]
+        )
+
+        key = s3.build_product_key(product_id, extension)
+        s3.upload(file_storage.stream, key, content_type)
+
+        try:
+            max_order = ProductImageRepository.get_max_order(product_id)
+            next_order = 0 if max_order is None else max_order + 1
+            return ProductImageRepository.create(
+                product_id=product_id, url=key, order=next_order
+            )
+        except Exception:
+            s3.delete(key)
+            raise
 
     @staticmethod
     def update(product_id, image_id, data, user_id=None, role=None):

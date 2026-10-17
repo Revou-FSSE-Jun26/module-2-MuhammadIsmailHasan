@@ -31,6 +31,14 @@ class UpdateProductImageSchema(Schema):
         return data
 
 
+class UploadProductImageSchema(Schema):
+    file = fields.Raw(
+        required=True,
+        metadata={"type": "string", "format": "binary"},
+        error_messages={"required": "file is required"},
+    )
+
+
 class ReorderImagesSchema(Schema):
     image_ids = fields.List(
         fields.Integer(),

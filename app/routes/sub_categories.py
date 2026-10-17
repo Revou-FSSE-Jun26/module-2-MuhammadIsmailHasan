@@ -133,22 +133,3 @@ class SubCategoryListWithProducts(MethodView):
             SubCategoryWithProductsSchema(many=True).dump(paginated.items),
             pagination=paginate_meta(paginated),
         )
-
-
-@sub_categories_blp.route("/<int:sub_category_id>/products")
-class SubCategoryProducts(MethodView):
-    def get(self, sub_category_id):
-        """Return the sub-category with its active products nested.
-
-        The full active product list is returned (not separately paginated),
-        consistent with the category -> sub_categories -> products shape.
-        """
-        try:
-            sub_category = SubCategoryService.get_by_id(sub_category_id)
-        except SubCategoryNotFoundError as e:
-            abort(404, message=str(e))
-
-        return make_response(
-            "get products by sub category success",
-            SubCategoryDetailResponseSchema().dump(sub_category),
-        )

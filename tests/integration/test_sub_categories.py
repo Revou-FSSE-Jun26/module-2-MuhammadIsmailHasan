@@ -242,7 +242,7 @@ class TestGetProductsBySubCategory:
         laptops_sub = seed_products[0].sub_category
 
         response = client.get(
-            f"/api/v1/sub-categories/{laptops_sub.id}/products",
+            f"/api/v1/sub-categories/{laptops_sub.id}",
             headers=auth_header(token),
         )
         data = response.get_json()
@@ -261,15 +261,6 @@ class TestGetProductsBySubCategory:
         product = sub_category["products"][0]
         assert product["name"] == "Laptop"
         assert set(product.keys()) == {"id", "image", "name", "price", "slug", "stock"}
-
-    def test_get_products_by_sub_category_not_found(self, client, seed_users):
-        token = get_auth_token(client, "buyer@test.com", "password123")
-
-        response = client.get(
-            "/api/v1/sub-categories/9999/products", headers=auth_header(token)
-        )
-
-        assert response.status_code == 404
 
 
 class TestGetSubCategoriesWithProducts:

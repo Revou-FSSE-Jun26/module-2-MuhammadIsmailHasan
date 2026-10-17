@@ -63,7 +63,7 @@ class TestGetCategories:
         electronics = seed_products[0].sub_category.category
 
         response = client.get(
-            f"/api/v1/categories/{electronics.id}/products-by-category",
+            f"/api/v1/categories/{electronics.id}",
             headers=auth_header(token),
         )
         data = response.get_json()
@@ -86,15 +86,6 @@ class TestGetCategories:
         product = laptops["products"][0]
         assert product["name"] == "Laptop"
         assert set(product.keys()) == {"id", "image", "name", "price", "slug", "stock"}
-
-    def test_get_products_by_category_not_found(self, client, seed_users):
-        token = get_auth_token(client, "buyer@test.com", "password123")
-
-        response = client.get(
-            "/api/v1/categories/9999/products-by-category", headers=auth_header(token)
-        )
-
-        assert response.status_code == 404
 
     def test_get_categories_filter_by_name(self, client, seed_users, seed_categories):
         token = get_auth_token(client, "buyer@test.com", "password123")

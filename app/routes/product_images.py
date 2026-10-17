@@ -4,6 +4,7 @@ from flask_smorest import Blueprint, abort
 from app.schemas.product_image_schema import (
     CreateProductImageSchema,
     UpdateProductImageSchema,
+    UploadProductImageSchema,
     ReorderImagesSchema,
     ProductImageResponseSchema,
 )
@@ -14,6 +15,8 @@ from app.services.product_image_service import (
     ProductImagePermissionError,
     ReorderValidationError,
 )
+from app.integrations.s3 import ImageStorageError
+from app.utils.images import InvalidImageError
 from app.auth import roles_required
 from app.utils.auth_context import current_user_id, current_role
 from app.utils.http import make_response
@@ -55,6 +58,33 @@ class ProductImageList(MethodView):
 
         return make_response(
             'product image created',
+            ProductImageResponseSchema().dump(image),
+            201,
+        )
+
+
+@product_images_blp.route('/upload')
+class ProductImageUpload(MethodView):
+
+    @product_images_blp.arguments(UploadProductImageSchema, location='files')
+    @roles_required('seller', 'admin')
+    def post(self, files, product_id):
+        try:
+            image = ProductImageService.create_from_upload(
+                product_id, files.get('file'),
+                user_id=current_user_id(), role=current_role(),
+            )
+        except ProductNotFoundError as e:
+            abort(404, message=str(e))
+        except ProductImagePermissionError as e:
+            abort(403, message=str(e))
+        except InvalidImageError as e:
+            abort(422, message=str(e))
+        except ImageStorageError as e:
+            abort(503, message=str(e))
+
+        return make_response(
+            'product image uploaded',
             ProductImageResponseSchema().dump(image),
             201,
         )

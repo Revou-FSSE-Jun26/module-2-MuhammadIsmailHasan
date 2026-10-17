@@ -20,6 +20,9 @@ Flask-Migrate==4.1.0
 alembic==1.19.1
 psycopg2-binary==2.9.12
 
+# --- Object storage (product image uploads) ---
+boto3==1.43.114
+
 # --- Config ---
 python-dotenv==1.2.2
 

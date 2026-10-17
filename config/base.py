@@ -39,6 +39,12 @@ class BaseConfig:
     # app/static/products lewat static folder Flask.
     IMAGE_BASE_URL = os.getenv('IMAGE_BASE_URL', '/static/images')
 
+    # ─── Image upload (S3) ────────────────────────────────────────────────────
+    AWS_S3_BUCKET = os.getenv('AWS_S3_BUCKET', '')
+    AWS_S3_REGION = os.getenv('AWS_S3_REGION', 'ap-southeast-1')
+    MAX_IMAGE_UPLOAD_BYTES = int(os.getenv('MAX_IMAGE_UPLOAD_BYTES', str(5 * 1024 * 1024)))
+    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(6 * 1024 * 1024)))
+
     # ─── Logging ──────────────────────────────────────────────────────────────
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
     LOG_TO_FILE = os.getenv('LOG_TO_FILE', 'true').lower() == 'true'

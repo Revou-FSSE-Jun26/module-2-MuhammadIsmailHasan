@@ -226,6 +226,21 @@ See `docs/payment-testing-guide.md` for a full local setup and test walkthrough.
 - Reorder via `PUT /products/<id>/images/reorder` with the exact set of active
   image IDs in the desired order. Delete is a soft delete. Only an admin or the
   owning seller may manage images.
+- What is stored is a **key**, not a full URL — `products/42/<uuid>.jpg`. The
+  API prefixes it with `IMAGE_BASE_URL` when it serializes a response, so
+  moving between local static files, S3 and a CDN is one environment variable
+  and a restart. Values that are already absolute are passed through unchanged.
+- `POST /products/<id>/images/upload` takes `multipart/form-data` with a `file`
+  field. The file type is detected from its magic bytes, not from the filename
+  or `Content-Type` the client sends; only JPEG, PNG and WebP are accepted, up
+  to `MAX_IMAGE_UPLOAD_BYTES` (5 MB by default). The object is uploaded to S3
+  first and the row written second, so no row can ever point at an object that
+  failed to upload; if the insert then fails, the object is deleted again so it
+  does not linger as an orphan. Returns `422` for an invalid file and `503`
+  when `AWS_S3_BUCKET` is not configured.
+- Deleting an image is a soft delete, so the S3 object is deliberately **not**
+  removed — the row can be restored. Reclaiming storage is a separate
+  housekeeping job.
 
 **Cart**
 
@@ -460,7 +475,8 @@ All routes are prefixed with `/api/v1`; protected routes need
 | PUT | `/products/<id>` | Update a product | seller, admin |
 | DELETE | `/products/<id>` | Soft-delete a product | seller, admin |
 | GET | `/products/<id>/images/` | List active images (ordered) | any role |
-| POST | `/products/<id>/images/` | Add an image (auto-appended) | admin, owning seller |
+| POST | `/products/<id>/images/` | Add an image by key/URL (auto-appended) | admin, owning seller |
+| POST | `/products/<id>/images/upload` | Upload an image file (multipart) | admin, owning seller |
 | PUT | `/products/<id>/images/<id>` | Update an image (`url` only) | admin, owning seller |
 | PUT | `/products/<id>/images/reorder` | Reorder active images | admin, owning seller |
 | DELETE | `/products/<id>/images/<id>` | Soft-delete an image | admin, owning seller |
