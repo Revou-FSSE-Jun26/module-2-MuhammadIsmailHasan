@@ -2,6 +2,7 @@ from marshmallow import Schema, fields, validate, pre_load
 
 from app.utils.text import strip_or_none
 from app.schemas.product_schema import ProductResponseSchema
+from app.schemas.fields import ImageUrlField
 
 
 class CategoryQuerySchema(Schema):
@@ -63,7 +64,7 @@ class UpdateCategorySchema(Schema):
 class CategoryResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
-    image = fields.String(allow_none=True)
+    image = ImageUrlField(allow_none=True)
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
 
@@ -71,7 +72,7 @@ class CategoryResponseSchema(Schema):
 class SubCategoryWithProductsSchema(Schema):
     id = fields.Integer()
     name = fields.String()
-    image = fields.String(allow_none=True)
+    image = ImageUrlField(allow_none=True)
     category_id = fields.Integer(allow_none=True)
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
@@ -90,7 +91,7 @@ class CategoryWithProductsSchema(Schema):
 
     id = fields.Integer()
     name = fields.String()
-    image = fields.String(allow_none=True)
+    image = ImageUrlField(allow_none=True)
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
     products = fields.List(fields.Nested(ProductResponseSchema))
@@ -99,7 +100,7 @@ class CategoryWithProductsSchema(Schema):
 class CategoryDetailResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
-    image = fields.String(allow_none=True)
+    image = ImageUrlField(allow_none=True)
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
     sub_categories = fields.List(

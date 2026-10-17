@@ -1,5 +1,6 @@
 from app.extensions import db
 from app.utils.timezone import utcnow
+from app.utils.images import build_image_url
 
 
 class Product(db.Model):
@@ -60,7 +61,7 @@ class Product(db.Model):
             "slug": self.slug,
             "price": float(self.price) if self.price is not None else None,
             "stock": self.stock,
-            "image": primary.url if primary else None,
+            "image": build_image_url(primary.url) if primary else None,
         }
 
     def to_dict_detail(self):

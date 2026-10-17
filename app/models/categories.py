@@ -1,5 +1,6 @@
 from app.extensions import db
 from app.utils.timezone import utcnow
+from app.utils.images import build_image_url
 
 
 class Category(db.Model):
@@ -17,7 +18,7 @@ class Category(db.Model):
         return {
             "id": self.id,
             "name": self.name,
-            "image": self.image,
+            "image": build_image_url(self.image),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "is_active": self.is_active,
         }

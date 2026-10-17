@@ -27,7 +27,7 @@ from seeders.scraper.catalog import (
     category_image_key,
     sub_category_image_key,
 )
-from seeders.scraped import build_rows, load_products, resolve_image_url
+from seeders.scraped import build_rows, load_products
 import bcrypt
 from datetime import timedelta
 from decimal import Decimal
@@ -62,7 +62,7 @@ def clear_tables():
 def seed_categories():
     """Seed kategori produk"""
     categories = [
-        Category(name=name, image=resolve_image_url(category_image_key(slugify(name))))
+        Category(name=name, image=category_image_key(slugify(name)))
         for name in CATEGORIES
     ]
 
@@ -91,7 +91,7 @@ def seed_sub_categories():
                 SubCategory(
                     name=sub_name,
                     category_id=category.id,
-                    image=resolve_image_url(sub_category_image_key(slugify(sub_name))),
+                    image=sub_category_image_key(slugify(sub_name)),
                 )
             )
 

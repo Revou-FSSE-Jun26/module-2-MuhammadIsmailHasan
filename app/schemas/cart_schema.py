@@ -2,6 +2,8 @@ from marshmallow import (
     Schema, fields, validates, validates_schema, ValidationError,
 )
 
+from app.schemas.fields import ImageUrlField
+
 
 class AddCartItemSchema(Schema):
     product_id = fields.Integer(
@@ -81,7 +83,7 @@ class CartItemProductSchema(Schema):
     price = fields.Float(allow_none=True)
     stock = fields.Integer(allow_none=True)
     is_active = fields.Boolean(allow_none=True)
-    image = fields.String(allow_none=True)
+    image = ImageUrlField(allow_none=True)
 
 
 class CartItemViewSchema(Schema):

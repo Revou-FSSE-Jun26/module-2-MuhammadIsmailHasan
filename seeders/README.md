@@ -29,7 +29,7 @@ app/static/images/        <- gitignored
 
 What the database stores is the key only — `products/103628491497-0.jpg`,
 `categories/books.jpg`, `sub-categories/women.jpg` — joined to
-`IMAGE_BASE_URL` at seed time.
+`IMAGE_BASE_URL` by the API when it builds a response.
 
 ## 1. Crawl products (one-off)
 
@@ -64,9 +64,17 @@ deliberately not stored.
 
 ### IMAGE_BASE_URL
 
-The JSON stores filenames, not full URLs. The prefix is decided at seed time
-through the `IMAGE_BASE_URL` environment variable, so the same dataset works
-across environments **without re-crawling and without a database migration**:
+Neither the JSON nor the database stores a full URL. Both store a **key**:
+
+```
+products/103628491497-0.jpg
+categories/books.jpg
+sub-categories/women.jpg
+```
+
+The API joins that key to `IMAGE_BASE_URL` when it serializes a response, so
+changing where images are served from is an environment variable and a restart
+— no re-crawl, no re-seed, no database update:
 
 ```bash
 IMAGE_BASE_URL=/static/images                            # local (default)
@@ -74,21 +82,13 @@ IMAGE_BASE_URL=https://BUCKET.s3.REGION.amazonaws.com    # S3
 IMAGE_BASE_URL=https://images.yourdomain.com             # CDN later
 ```
 
-`IMAGE_BASE_URL` is the root the three key prefixes hang off, so one variable
-covers product, category and sub-category images at once.
+One variable covers product, category and sub-category images at once, because
+all three keys hang off the same root.
 
-Seeding a hosted database with images served from S3:
-
-```bash
-DATABASE_URL="postgresql://...@...supabase.com:5432/postgres" \
-IMAGE_BASE_URL="https://BUCKET.s3.ap-southeast-3.amazonaws.com" \
-python -m seeders.seeders
-```
-
-Note on Supabase: use port **5432** (session mode) for the seeder, not 6543
-(transaction pooler) — pgbouncer in transaction mode tends to clash with
-SQLAlchemy prepared statements during bulk inserts. The application itself can
-use 6543.
+Where it is applied: `build_image_url()` in `app/utils/images.py`, used by
+`ImageUrlField` (`app/schemas/fields.py`) in the response schemas and by the
+models' `to_dict()`. Values that are already absolute are passed through
+unchanged, so rows written before this change keep working.
 
 ### Why images are downloaded
 
@@ -112,6 +112,133 @@ python -c "from seeders.seeders import seed_test_data; seed_test_data()"
 # Option 3: from the project root
 python -c "from seeders import seed_test_data; seed_test_data()"
 ```
+
+## 3. Deploy: images to S3, data to Supabase
+
+Run this from your laptop, not from Render — the images live locally and the
+free Render tier has no shell. Steps 1 and 2 are one-off; step 4 is what you
+repeat whenever the dataset changes.
+
+### 1. Create the bucket (once)
+
+```bash
+BUCKET=revoshop-images
+REGION=ap-southeast-1
+
+aws s3api create-bucket --bucket "$BUCKET" --region "$REGION" \
+  --create-bucket-configuration LocationConstraint="$REGION"
+
+aws s3api put-public-access-block --bucket "$BUCKET" \
+  --public-access-block-configuration \
+  "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+
+aws s3api put-bucket-policy --bucket "$BUCKET" --policy '{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "PublicReadCatalogImages",
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": "s3:GetObject",
+    "Resource": [
+      "arn:aws:s3:::revoshop-images/products/*",
+      "arn:aws:s3:::revoshop-images/categories/*",
+      "arn:aws:s3:::revoshop-images/sub-categories/*"
+    ]
+  }]
+}'
+```
+
+ACLs are disabled on new buckets, so `--acl public-read` would fail; a bucket
+policy is the supported way. Scoping `Resource` to the three prefixes keeps
+anything else you later store in this bucket private.
+
+### 2. Upload the images
+
+```bash
+aws configure set default.s3.max_concurrent_requests 32
+
+aws s3 sync app/static/images/ s3://revoshop-images/ \
+  --exclude "review.html" \
+  --cache-control "public, max-age=31536000, immutable"
+```
+
+The local folder layout mirrors the bucket, so one `sync` covers products,
+categories and sub-categories. It is restartable: re-running only uploads what
+is missing. Verify one object:
+
+```bash
+curl -sI https://revoshop-images.s3.ap-southeast-1.amazonaws.com/categories/books.jpg | head -3
+```
+
+### 3. Bring the Supabase schema up to date
+
+```bash
+export SUPABASE_URL="postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/postgres"
+
+DATABASE_URL="$SUPABASE_URL" FLASK_APP=run.py python -m flask db current
+DATABASE_URL="$SUPABASE_URL" FLASK_APP=run.py python -m flask db upgrade
+```
+
+**Use the Session pooler host, not the direct one.** `db.<ref>.supabase.co`
+resolves to an IPv6 address only, so on an IPv4-only network it fails with
+`could not translate host name`. The pooler host has IPv4. Note the username
+becomes `postgres.<project-ref>`.
+
+Port **5432** (session mode) is required here and in the next step: the
+transaction pooler on 6543 clashes with SQLAlchemy prepared statements during
+bulk inserts. Your deployed app should still use 6543.
+
+### 4. Seed
+
+```bash
+DATABASE_URL="$SUPABASE_URL" python -m seeders.seeders
+```
+
+The seeder does not need `IMAGE_BASE_URL` — it writes keys. The base URL is
+applied by the API at response time, so it belongs on the host (step 5).
+
+`seed_test_data()` calls `clear_tables()` first, so **everything already in
+that database is deleted**, including users and orders created through the API.
+
+Check the result:
+
+```bash
+DATABASE_URL="$SUPABASE_URL" python -c "
+from app import create_app; from app.extensions import db; from sqlalchemy import text
+a=create_app(); a.config['SQLALCHEMY_ECHO']=False
+with a.app_context():
+    q=lambda s: db.session.execute(text(s)).scalar()
+    print('products  :', q('select count(*) from products'))
+    print('images    :', q('select count(*) from product_images'))
+    print('bad keys  :', q(\"select count(*) from product_images where url not like 'products/%'\"))
+    print('sample    :', q('select url from product_images limit 1'))
+"
+```
+
+Expect 2200 products, 8775 images, 0 bad keys, and a sample like
+`products/103628491497-0.jpg`.
+
+### 5. Deploy the code
+
+```bash
+git push
+```
+
+Then set one environment variable on the host, or every image URL it returns
+will point at the API's own domain and 404:
+
+```
+IMAGE_BASE_URL = https://revoshop-images.s3.ap-southeast-1.amazonaws.com
+```
+
+On Render that is Dashboard → your service → Environment → Add Environment
+Variable, which triggers a restart. The API only ever returns URLs; browsers
+fetch the images straight from S3 without the API being involved.
+
+One thing to set up though: this project has no `render.yaml`, and `Procfile`
+only starts gunicorn, so **deploys do not run migrations**. Either put
+`flask db upgrade` in the host's pre-deploy command, or keep running step 3 by
+hand after every new migration.
 
 ## What gets seeded
 
@@ -198,7 +325,7 @@ good enough without running a frontend. Open
 | `seed_users()` | Users with bcrypt-hashed passwords |
 | `seed_products()` | Products from `seeders/data/`, returns rows with ids |
 | `seed_product_images()` | Product images, from the `seed_products()` return value |
-| `resolve_image_url()` | `scraped.py` — filename + `IMAGE_BASE_URL` -> full URL |
+| `build_image_url()` | `app/utils/images.py` — key + `IMAGE_BASE_URL` -> full URL |
 | `generate()` | `review.py` — HTML review page from the database |
 | `category_image_key()` | `catalog.py` — slug -> `categories/<slug>.jpg` |
 | `sub_category_image_key()` | `catalog.py` — slug -> `sub-categories/<slug>.jpg` |

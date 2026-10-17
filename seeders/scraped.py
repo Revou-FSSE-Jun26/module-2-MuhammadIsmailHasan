@@ -9,8 +9,6 @@ from seeders.scraper.catalog import CATALOG
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 
-DEFAULT_IMAGE_BASE_URL = "/static/images"
-
 RANDOM_SEED = 20261016
 
 OUT_OF_STOCK_RATIO = 0.06
@@ -18,18 +16,6 @@ SINGLE_STOCK_RATIO = 0.06
 
 GALLERY_MIN = 3
 GALLERY_MAX = 5
-
-
-def image_base_url():
-    return os.getenv("IMAGE_BASE_URL", DEFAULT_IMAGE_BASE_URL).rstrip("/")
-
-
-def resolve_image_url(value, base=None):
-    if not value:
-        return None
-    if value.startswith(("http://", "https://", "/")):
-        return value
-    return f"{base if base is not None else image_base_url()}/{value}"
 
 
 def available_sub_categories():
@@ -99,7 +85,6 @@ def make_slug(product, used_slugs):
 
 def build_rows(grouped, sub_category_ids, seller_ids):
     rng = random.Random(RANDOM_SEED)
-    base = image_base_url()
     used_slugs = set()
     rows = []
 
@@ -122,8 +107,7 @@ def build_rows(grouped, sub_category_ids, seller_ids):
                     "price": product["price"],
                     "stock": pick_stock(rng),
                     "images": [
-                        resolve_image_url(name, base)[:500]
-                        for name in build_gallery(products, index, rng)
+                        key[:500] for key in build_gallery(products, index, rng)
                     ],
                 }
             )

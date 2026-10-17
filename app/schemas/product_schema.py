@@ -1,6 +1,8 @@
 from marshmallow import Schema, fields, validate, validates, ValidationError, pre_load
 
 from app.utils.text import strip_or_none
+from app.schemas.fields import ImageUrlField
+from app.utils.images import build_image_url
 
 
 class ProductQuerySchema(Schema):
@@ -125,7 +127,7 @@ class UpdateProductSchema(Schema):
 class ProductImageResponseSchema(Schema):
     id = fields.Integer()
     product_id = fields.Integer()
-    url = fields.String()
+    url = ImageUrlField()
     order = fields.Integer()
     is_active = fields.Boolean()
     created_at = fields.DateTime(format="iso")
@@ -141,7 +143,7 @@ class ProductResponseSchema(Schema):
 
     def get_primary_image(self, obj):
         primary = obj.primary_image
-        return primary.url if primary else None
+        return build_image_url(primary.url) if primary else None
 
 
 class CategoryResponseSchema(Schema):

@@ -1,5 +1,6 @@
 from app.extensions import db
 from app.utils.timezone import utcnow
+from app.utils.images import build_image_url
 
 
 class ProductImage(db.Model):
@@ -26,7 +27,7 @@ class ProductImage(db.Model):
         return {
             'id': self.id,
             'product_id': self.product_id,
-            'url': self.url,
+            'url': build_image_url(self.url),
             'order': self.order,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None,

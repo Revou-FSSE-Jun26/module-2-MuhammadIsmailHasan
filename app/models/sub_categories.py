@@ -1,5 +1,6 @@
 from app.extensions import db
 from app.utils.timezone import utcnow
+from app.utils.images import build_image_url
 
 
 class SubCategory(db.Model):
@@ -36,7 +37,7 @@ class SubCategory(db.Model):
         return {
             "id": self.id,
             "name": self.name,
-            "image": self.image,
+            "image": build_image_url(self.image),
             "category_id": self.category_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "is_active": self.is_active,

@@ -1,6 +1,7 @@
 from marshmallow import Schema, fields, validate, pre_load
 
 from app.utils.text import strip_or_none
+from app.schemas.fields import ImageUrlField
 
 
 class CreateProductImageSchema(Schema):
@@ -45,7 +46,7 @@ class ReorderImagesSchema(Schema):
 class ProductImageResponseSchema(Schema):
     id = fields.Integer()
     product_id = fields.Integer()
-    url = fields.String()
+    url = ImageUrlField()
     order = fields.Integer()
     is_active = fields.Boolean()
     created_at = fields.DateTime(format='iso')

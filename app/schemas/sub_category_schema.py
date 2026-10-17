@@ -3,6 +3,7 @@ from marshmallow import Schema, fields, validate, pre_load
 from app.utils.text import strip_or_none
 from app.schemas.category_schema import CategoryResponseSchema
 from app.schemas.product_schema import ProductResponseSchema
+from app.schemas.fields import ImageUrlField
 
 
 class SubCategoryQuerySchema(Schema):
@@ -75,7 +76,7 @@ class UpdateSubCategorySchema(Schema):
 class SubCategoryResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
-    image = fields.String(allow_none=True)
+    image = ImageUrlField(allow_none=True)
     category_id = fields.Integer(allow_none=True)
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
@@ -84,7 +85,7 @@ class SubCategoryResponseSchema(Schema):
 class SubCategoryDetailResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
-    image = fields.String(allow_none=True)
+    image = ImageUrlField(allow_none=True)
     category_id = fields.Integer(allow_none=True)
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()

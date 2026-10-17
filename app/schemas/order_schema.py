@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate, validates, ValidationError
+from app.utils.images import build_image_url
 
 
 class OrderItemInputSchema(Schema):
@@ -88,7 +89,7 @@ class OrderItemProductSchema(Schema):
 
     def get_primary_image(self, obj):
         primary = obj.primary_image
-        return primary.url if primary else None
+        return build_image_url(primary.url) if primary else None
 
 
 class OrderItemResponseSchema(Schema):
