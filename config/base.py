@@ -33,14 +33,21 @@ class BaseConfig:
     MIDTRANS_IS_PRODUCTION = os.getenv('MIDTRANS_IS_PRODUCTION', 'false').lower() == 'true'
     MIDTRANS_EXPIRY_MINUTES = int(os.getenv('MIDTRANS_EXPIRY_MINUTES', '1440'))
 
+    # ─── CORS ─────────────────────────────────────────────────────────────────
+    CORS_ORIGINS = [
+        origin.strip()
+        for origin in os.getenv('CORS_ORIGINS', '').split(',')
+        if origin.strip()
+    ]
+
     # ─── Product images ───────────────────────────────────────────────────────
-    IMAGE_BASE_URL = os.getenv('IMAGE_BASE_URL', '/static/images')
+    IMAGE_BASE_URL = os.getenv('IMAGE_BASE_URL') or '/static/images'
 
     # ─── Image upload (S3) ────────────────────────────────────────────────────
     AWS_S3_BUCKET = os.getenv('AWS_S3_BUCKET', '')
-    AWS_S3_REGION = os.getenv('AWS_S3_REGION', 'ap-southeast-1')
-    MAX_IMAGE_UPLOAD_BYTES = int(os.getenv('MAX_IMAGE_UPLOAD_BYTES', str(5 * 1024 * 1024)))
-    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', str(6 * 1024 * 1024)))
+    AWS_S3_REGION = os.getenv('AWS_S3_REGION') or 'ap-southeast-1'
+    MAX_IMAGE_UPLOAD_BYTES = int(os.getenv('MAX_IMAGE_UPLOAD_BYTES') or 5 * 1024 * 1024)
+    MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH') or 6 * 1024 * 1024)
 
     # ─── Logging ──────────────────────────────────────────────────────────────
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

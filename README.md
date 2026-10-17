@@ -271,6 +271,39 @@ See `docs/payment-testing-guide.md` for a full local setup and test walkthrough.
 
 </details>
 
+## CORS (browser access)
+
+Browsers block a page on one origin from reading responses from another unless
+the API opts in, so a frontend on `https://app.example.com` calling this API
+needs CORS enabled here — no proxy route on the frontend is required.
+
+CORS is applied to `/api/*` only and the allowed origins come from one
+environment variable, comma-separated:
+
+```bash
+CORS_ORIGINS=https://app.example.com,https://www.example.com
+```
+
+| Environment | Default when `CORS_ORIGINS` is unset |
+| --- | --- |
+| development | `http://localhost:3000`, `http://localhost:5173`, `http://127.0.0.1:5173` |
+| production | **none — every cross-origin browser request is blocked** |
+
+Production is closed by default on purpose, so a forgotten variable fails
+visibly instead of silently exposing the API to every website. On Render, add
+`CORS_ORIGINS` under Environment with your deployed frontend's exact origin
+(scheme + host, no path, no trailing slash) and let the service restart.
+
+- Allowed request headers are `Authorization` and `Content-Type`; allowed
+  methods are `GET POST PUT PATCH DELETE OPTIONS`. Preflight responses are
+  cached for 10 minutes.
+- Authentication is a bearer token in the `Authorization` header, not a cookie,
+  so credentialed CORS is off and a wildcard origin is never returned.
+- Error responses (401, 413, 422, …) carry the CORS headers too, so the
+  frontend can read the error body instead of seeing an opaque network failure.
+- This is enforced by the browser only. It does not protect the API from
+  `curl` or other servers — authentication does that.
+
 ## Architecture
 
 ```mermaid
@@ -392,6 +425,22 @@ docker compose -f docker-compose.prod.yml up --build -d
 
 Override the published port with `WEB_PORT` (e.g. `WEB_PORT=8080 docker compose
 up`).
+
+Other settings are passed through from `.env` to the container, and **an empty
+value means "use the built-in default"** (not "set it to empty"):
+
+| Variable | Purpose |
+| --- | --- |
+| `CORS_ORIGINS` | Browser origins allowed to call the API — see [CORS](#cors-browser-access) |
+| `IMAGE_BASE_URL` | Root that stored image keys are joined to; empty serves `/static/images` |
+| `AWS_S3_BUCKET`, `AWS_S3_REGION` | Target of `POST /products/<id>/images/upload`; empty bucket disables it (503) |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Only needed outside AWS; on EC2 attach an IAM role and leave both empty |
+| `MAX_IMAGE_UPLOAD_BYTES`, `MAX_CONTENT_LENGTH` | Upload size limits (5 MB / 6 MB by default) |
+
+The image build leaves `app/static/images/` out (`.dockerignore`), so locally
+downloaded product photos are never baked into the image. In development the
+project directory is bind-mounted, so those files are still served from disk; in
+production, point `IMAGE_BASE_URL` at S3 or a CDN.
 
 <details>
 <summary>Common Docker tasks</summary>
@@ -623,3 +672,6 @@ logged.
   (`brew services list`), check `DATABASE_URL` in `.env`, and that the database
   exists (`psql -l`).
 - **Module not found:** `pip3 install -r requirements.txt`.
+- **Browser says "blocked by CORS policy" but the API works in Postman:** the
+  frontend's origin is not in `CORS_ORIGINS`. Match it exactly, including the
+  scheme and port (`http://localhost:5173` is not `http://localhost:3000`).

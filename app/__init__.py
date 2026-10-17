@@ -1,7 +1,7 @@
 import os
 from flask import Flask
 
-from app.extensions import db, jwt, migrate, api
+from app.extensions import db, jwt, migrate, api, cors
 from app.errors import register_error_handlers
 from app.logging_config import configure_logging
 from config import config_by_name
@@ -22,6 +22,13 @@ def create_app(config_name=None):
     jwt.init_app(flask_app)
     migrate.init_app(flask_app, db)
     api.init_app(flask_app)
+    cors.init_app(
+        flask_app,
+        resources={r"/api/*": {"origins": flask_app.config["CORS_ORIGINS"]}},
+        allow_headers=["Authorization", "Content-Type"],
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        max_age=600,
+    )
     api.spec.components.security_scheme(
         "BearerAuth",
         {

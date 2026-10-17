@@ -42,6 +42,7 @@ docker-compose*.yml
 jira/
 locust/
 images/
+app/static/images/
 requirements-dev.txt
 .pylintrc
 README.md
