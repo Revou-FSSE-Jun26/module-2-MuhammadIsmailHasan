@@ -679,6 +679,181 @@ Shared by `GET /products/`, `/categories/`, `/sub-categories/`, `/orders/`
 
 </details>
 
+### Request Bodies
+
+Fields for the `POST` / `PUT` endpoints that take a JSON body. `DELETE` routes
+take no body (they act on the path `<id>`). **Required** fields must be present;
+the rest are optional. This is a quick reference — the
+[Swagger UI](https://revoshop-apis.onrender.com/docs/swagger-ui) and
+[Postman collection](https://documenter.getpostman.com/view/17905565/2sBYAysoh1)
+carry the full schema, validation rules, and live examples.
+
+<details>
+<summary>Auth & Users</summary>
+
+**`POST /auth/login`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `email` | string | yes | |
+| `password` | string | yes | |
+
+**`POST /users/`** (register)
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `username` | string | yes | 1–100 chars |
+| `email` | string | yes | valid email, ≤100 chars |
+| `password` | string | yes | |
+| `role` | string | yes | `buyer` or `seller` only |
+
+</details>
+
+<details>
+<summary>Profile & Addresses</summary>
+
+**`PUT /profile`** (upsert — all fields optional)
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `full_name` | string | no | ≤150 chars |
+| `phone` | string | no | ≤30 chars |
+| `avatar_url` | string | no | ≤255 chars |
+
+**`POST /addresses`** / **`PUT /addresses/<id>`** (on `PUT` all fields optional)
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `recipient_name` | string | yes | 1–150 chars |
+| `phone` | string | yes | 1–30 chars |
+| `address_line` | string | yes | 1–255 chars |
+| `city` | string | yes | 1–100 chars |
+| `label` | string | no | ≤50 chars |
+| `postal_code` | string | no | ≤20 chars |
+| `is_default` | bool | no | defaults `false` |
+
+`PUT /addresses/<id>/default` takes no body.
+
+</details>
+
+<details>
+<summary>Categories, Sub-categories & Products</summary>
+
+**`POST` / `PUT /categories/<id>`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | string | yes | 1–255 chars, unique |
+| `image` | string | no | ≤500 chars |
+
+**`POST` / `PUT /sub-categories/<id>`** (on `PUT` fields optional)
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | string | yes | 1–255 chars |
+| `category_id` | int | yes | parent category must exist |
+| `image` | string | no | ≤500 chars |
+
+**`POST` / `PUT /products/<id>`** (on `PUT` all fields optional)
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `name` | string | yes | 1–255 chars |
+| `price` | float | yes | ≥ 0, ≤ 11 digits |
+| `stock` | int | yes | |
+| `description` | string | no | ≤1000 chars |
+| `sub_category_id` | int | no | must exist |
+
+</details>
+
+<details>
+<summary>Product Images</summary>
+
+**`POST /products/<id>/images/`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `url` | string | yes | 1–500 chars; stored key or absolute URL. `order` is server-managed — sending it returns `422` |
+
+**`PUT /products/<id>/images/<id>`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `url` | string | no | 1–500 chars |
+
+**`POST /products/<id>/images/upload`** — `multipart/form-data`
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `file` | file | yes | JPEG / PNG / WebP, ≤5 MB (detected from magic bytes) |
+
+**`PUT /products/<id>/images/reorder`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `image_ids` | int[] | yes | exact set of active image IDs in desired order |
+
+</details>
+
+<details>
+<summary>Orders</summary>
+
+**`POST /orders/`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `items` | object[] | yes | each `{ product_id: int, quantity: int > 0 }`, non-empty |
+| `address_id` | int | no | defaults to the default address |
+
+**`PUT /orders/<id>`** (change status)
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `status` | string | yes | `paid`, `processing`, `shipped`, `delivered`, `returned`, `cancelled` |
+| `tracking_id` | string | conditional | required for `processing → shipped`; 1–100 chars |
+
+**`PUT /orders/<id>/address`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `address_id` | int | yes | only while `waiting_for_payment` |
+
+</details>
+
+<details>
+<summary>Cart & Payments</summary>
+
+**`POST /cart/items`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `product_id` | int | yes | |
+| `quantity` | int | no | defaults `1`, must be > 0 |
+
+**`PUT /cart/items/<id>`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `quantity` | int | yes | `0` removes the item; cannot be negative |
+
+**`POST /cart/checkout`** — all optional; `seller_id` and `cart_item_ids` are mutually exclusive
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `seller_id` | int | no | checkout one seller's group |
+| `cart_item_ids` | int[] | no | checkout chosen lines |
+| `address_id` | int | no | defaults to the default address |
+
+**`POST /payments/`**
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `order_id` | int | yes | order must be `waiting_for_payment` and owned by the buyer |
+
+The Midtrans webhook body is sent by Midtrans, not by API clients.
+
+</details>
+
 ## Testing
 
 Fast unit tests (repositories mocked) and integration tests (full HTTP stack on
