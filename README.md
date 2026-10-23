@@ -476,19 +476,45 @@ Every response has a boolean `status` and a `message`. Success responses add
 { "status": false, "message": "product not found" }
 ```
 
+Errors never carry `data`; they are always just `status: false` + `message`.
+Validation errors (`422`) are flattened to a single `message` string rather than
+a field-by-field object. Beyond `status`, `message`, and `data`, a few endpoints
+add extra top-level fields:
+
+| Field | Type | Added by |
+|-------|------|----------|
+| `data` | object / array | every success response that returns a body |
+| `pagination` | object | list endpoints (`page`, `limit`, `total_items`, `total_pages`) |
+| `access_token` | string | `POST /auth/login`, `POST /auth/refresh` |
+| `refresh_token` | string | `POST /auth/login` |
+
+For payments, `snap_token` and `redirect_url` are returned **inside** `data`, not
+at the top level.
+
 | Status | When |
 |--------|------|
 | 400 | Bad request (e.g. illegal status transition) |
 | 401 | Missing/invalid token or wrong credentials |
 | 403 | Authenticated but not allowed (role or ownership) |
 | 404 | Not found |
+| 405 | Method not allowed |
 | 409 | Conflict (e.g. duplicate name, deleting the default address) |
 | 422 | Validation error or insufficient stock |
+| 502 | Payment gateway (Midtrans) error on `POST /payments/` |
 | 500 / 503 | Server error / database unavailable |
 
 ## API Endpoints
 
-All routes are prefixed with `/api/v1`; protected routes need
+All routes are prefixed with `/api/v1`. The **Access** column tells you who may
+call each route:
+
+- **public** — no token required; call it anonymously.
+- **authenticated** — any logged-in user; send `Authorization: Bearer <access_token>`.
+- **buyer / seller / admin** (or a combination) — authenticated *and* the JWT
+  must carry one of the listed roles. Some routes add an ownership check on top
+  (e.g. a seller only manages their own products) — see the description.
+
+In short: every route that is not marked **public** needs
 `Authorization: Bearer <access_token>`.
 
 <details>
@@ -527,25 +553,25 @@ All routes are prefixed with `/api/v1`; protected routes need
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| GET | `/categories/` | List categories | any role |
-| GET | `/categories/products` | Categories with a product preview | any role |
+| GET | `/categories/` | List categories | public |
+| GET | `/categories/products` | Categories with a product preview | public |
 | POST | `/categories/` | Create a category | seller, admin |
-| GET | `/categories/<id>` | Category → sub-categories → product preview | any role |
+| GET | `/categories/<id>` | Category → sub-categories → product preview | public |
 | PUT | `/categories/<id>` | Update a category | seller, admin |
 | DELETE | `/categories/<id>` | Soft-delete a category | seller, admin |
-| GET | `/sub-categories/` | List sub-categories | any role |
-| GET | `/sub-categories/products` | Sub-categories with a product preview | any role |
+| GET | `/sub-categories/` | List sub-categories | public |
+| GET | `/sub-categories/products` | Sub-categories with a product preview | public |
 | POST | `/sub-categories/` | Create a sub-category | seller, admin |
-| GET | `/sub-categories/<id>` | Sub-category with a product preview | any role |
+| GET | `/sub-categories/<id>` | Sub-category with a product preview | public |
 | PUT | `/sub-categories/<id>` | Update a sub-category | seller, admin |
 | DELETE | `/sub-categories/<id>` | Soft-delete a sub-category | seller, admin |
-| GET | `/products/` | List products (filter, sort, paginate) | any role |
+| GET | `/products/` | List products (filter, sort, paginate) | public |
 | POST | `/products/` | Create a product | seller, admin |
-| GET | `/products/<id>` | Product by ID | any role |
-| GET | `/products/slug/<slug>` | Product by slug | any role |
+| GET | `/products/<id>` | Product by ID | public |
+| GET | `/products/slug/<slug>` | Product by slug | public |
 | PUT | `/products/<id>` | Update a product | seller, admin |
 | DELETE | `/products/<id>` | Soft-delete a product | seller, admin |
-| GET | `/products/<id>/images/` | List active images (ordered) | any role |
+| GET | `/products/<id>/images/` | List active images (ordered) | public |
 | POST | `/products/<id>/images/` | Add an image by key/URL (auto-appended) | admin, owning seller |
 | POST | `/products/<id>/images/upload` | Upload an image file (multipart) | admin, owning seller |
 | PUT | `/products/<id>/images/<id>` | Update an image (`url` only) | admin, owning seller |
@@ -586,6 +612,70 @@ exclusive).
 | POST | `/payments/` | Start a payment for an order; returns `snap_token` + `redirect_url` | buyer |
 | GET | `/payments/<id>` | Get a payment record (owning buyer or admin) | buyer, admin |
 | POST | `/payments/webhook/midtrans` | Midtrans status notification (signature-verified) | public |
+
+</details>
+
+### Query Parameters
+
+List endpoints accept query parameters for filtering, sorting, and pagination.
+All are optional; the defaults are shown below. Out-of-range or invalid values
+return `422`.
+
+<details>
+<summary>Common pagination & sorting</summary>
+
+Shared by `GET /products/`, `/categories/`, `/sub-categories/`, `/orders/`
+(and the `/products` preview variants).
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `page` | int | `1` | Page number, min `1` |
+| `limit` | int | `10` | Items per page, `1`–`100` |
+| `sort_by` | string | varies | Allowed values differ per resource (see below) |
+| `order` | string | `asc` (`orders`: `desc`) | `asc` or `desc` |
+
+</details>
+
+<details>
+<summary>GET /products/</summary>
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `name` | string | — | Case-insensitive name filter |
+| `sub_category_id` | int | — | Filter by sub-category |
+| `seller_id` | int | — | Filter by seller |
+| `min_price` | float | — | Minimum price |
+| `max_price` | float | — | Maximum price |
+| `sort_by` | string | `id` | `id`, `name`, `price`, `created_at` |
+| `order` | string | `asc` | `asc`, `desc` |
+| `page` / `limit` | int | `1` / `10` | Pagination |
+
+</details>
+
+<details>
+<summary>GET /categories/ and /sub-categories/</summary>
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `name` | string | — | Case-insensitive name filter |
+| `category_id` | int | — | **Sub-categories only** — filter by parent category |
+| `sort_by` | string | `id` | `id`, `name`, `created_at` |
+| `order` | string | `asc` | `asc`, `desc` |
+| `page` / `limit` | int | `1` / `10` | Pagination |
+| `products_limit` | int | `10` | Max products per group in the `/products` preview variants and `/<id>` detail; `0`–`100`. `0` returns the tree with no products |
+
+</details>
+
+<details>
+<summary>GET /orders/</summary>
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `status` | string | — | One of `waiting_for_payment`, `paid`, `processing`, `shipped`, `delivered`, `returned`, `cancelled` |
+| `include_deleted` | bool | `false` | Include soft-deleted orders |
+| `sort_by` | string | `id` | `id`, `total_amount`, `ordered_at` |
+| `order` | string | `desc` | `asc`, `desc` |
+| `page` / `limit` | int | `1` / `10` | Pagination |
 
 </details>
 
