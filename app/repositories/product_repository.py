@@ -1,3 +1,5 @@
+from sqlalchemy.orm import joinedload
+
 from app.models.products import Product
 from app.models.sub_categories import SubCategory
 from app.models.orders import Order, OrderItem
@@ -7,7 +9,9 @@ from app.extensions import db
 class ProductRepository:
     @staticmethod
     def get_all(filters=None, sort_by="id", order="asc", page=1, limit=10):
-        query = Product.query.filter_by(is_active=True)
+        query = Product.query.options(joinedload(Product.sub_category)).filter_by(
+            is_active=True
+        )
 
         if filters:
             if filters.get("name"):

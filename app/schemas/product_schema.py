@@ -133,6 +133,12 @@ class ProductImageResponseSchema(Schema):
     created_at = fields.DateTime(format="iso")
 
 
+class SubCategoryBriefSchema(Schema):
+    id = fields.Integer()
+    name = fields.String()
+    category_id = fields.Integer(allow_none=True)
+
+
 class ProductResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()
@@ -140,6 +146,7 @@ class ProductResponseSchema(Schema):
     price = fields.Float()
     stock = fields.Integer()
     image = fields.Method("get_primary_image")
+    sub_category = fields.Nested(SubCategoryBriefSchema, allow_none=True)
 
     def get_primary_image(self, obj):
         primary = obj.primary_image
