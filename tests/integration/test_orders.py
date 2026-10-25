@@ -139,6 +139,39 @@ class TestGetOrders:
             assert order['status'] == 'waiting_for_payment'
 
 
+class TestOrderSeller:
+
+    def test_list_includes_items_and_seller(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/orders/', headers=auth_header(token))
+        order = response.get_json()['data'][0]
+
+        assert order['seller'] == {'id': seed_users['seller'].id, 'name': 'seller_test'}
+        assert len(order['items']) == 1
+        assert order['items'][0]['seller']['id'] == seed_users['seller'].id
+        assert order['items'][0]['product']['name'] == 'Laptop'
+
+    def test_detail_includes_seller(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get(f'/api/v1/orders/{seed_order.id}', headers=auth_header(token))
+        data = response.get_json()['data']
+
+        assert data['seller']['name'] == 'seller_test'
+        assert data['items'][0]['seller']['name'] == 'seller_test'
+
+    def test_list_pagination_meta(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        response = client.get('/api/v1/orders/?limit=5', headers=auth_header(token))
+        pagination = response.get_json()['pagination']
+
+        assert pagination['limit'] == 5
+        assert pagination['total_items'] == 1
+        assert pagination['total_pages'] == 1
+
+
 class TestGetOrder:
 
     def test_get_order_success(self, client, seed_users, seed_order):
