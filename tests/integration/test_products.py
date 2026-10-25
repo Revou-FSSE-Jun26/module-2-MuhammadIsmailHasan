@@ -318,6 +318,57 @@ class TestUpdateProduct:
         assert response.status_code == 403
 
 
+class TestProductOwnership:
+    def test_other_seller_cannot_update(self, client, seed_users, seed_products):
+        token = get_auth_token(client, "seller2@test.com", "password123")
+        product = seed_products[0]
+
+        response = client.put(
+            f"/api/v1/products/{product.id}",
+            json={"name": "Hijacked"},
+            headers=auth_header(token),
+        )
+
+        assert response.status_code == 403
+        assert client.get(f"/api/v1/products/{product.id}").get_json()["data"][
+            "name"
+        ] == "Laptop"
+
+    def test_other_seller_cannot_delete(self, client, seed_users, seed_products):
+        token = get_auth_token(client, "seller2@test.com", "password123")
+        product = seed_products[0]
+
+        response = client.delete(
+            f"/api/v1/products/{product.id}", headers=auth_header(token)
+        )
+
+        assert response.status_code == 403
+        assert client.get(f"/api/v1/products/{product.id}").status_code == 200
+
+    def test_admin_can_update_any_product(self, client, seed_users, seed_products):
+        token = get_auth_token(client, "admin@test.com", "password123")
+        product = seed_products[0]
+
+        response = client.put(
+            f"/api/v1/products/{product.id}",
+            json={"stock": 5},
+            headers=auth_header(token),
+        )
+
+        assert response.status_code == 200
+        assert response.get_json()["data"]["stock"] == 5
+
+    def test_admin_can_delete_any_product(self, client, seed_users, seed_products):
+        token = get_auth_token(client, "admin@test.com", "password123")
+        product = seed_products[0]
+
+        response = client.delete(
+            f"/api/v1/products/{product.id}", headers=auth_header(token)
+        )
+
+        assert response.status_code == 200
+
+
 class TestDeleteProduct:
     def test_delete_product_success(self, client, seed_users, seed_products):
         token = get_auth_token(client, "seller@test.com", "password123")

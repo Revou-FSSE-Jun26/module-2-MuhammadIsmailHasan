@@ -20,7 +20,21 @@ class ProductHasActiveOrdersError(Exception):
     pass
 
 
+class ProductPermissionError(Exception):
+    pass
+
+
 class ProductService:
+    @staticmethod
+    def _authorize(product, user_id, role):
+        if role == "admin":
+            return
+        if role == "seller" and product.seller_id == user_id:
+            return
+        raise ProductPermissionError(
+            "you don't have permission to modify this product"
+        )
+
     @staticmethod
     def get_all(filters=None, sort_by="id", order="asc", page=1, limit=10):
         return ProductRepository.get_all(
@@ -69,10 +83,12 @@ class ProductService:
         return ProductRepository.create(data, seller_id=seller_id, slug=slug)
 
     @staticmethod
-    def update(product_id, data):
+    def update(product_id, data, user_id=None, role=None):
         product = ProductRepository.get_by_id(product_id)
         if not product:
             raise ProductNotFoundError("Product not found")
+
+        ProductService._authorize(product, user_id, role)
 
         update_data = {k: v for k, v in data.items() if v is not None}
 
@@ -89,10 +105,12 @@ class ProductService:
         return ProductRepository.update(product, update_data)
 
     @staticmethod
-    def delete(product_id):
+    def delete(product_id, user_id=None, role=None):
         product = ProductRepository.get_by_id(product_id)
         if not product:
             raise ProductNotFoundError("product not found")
+
+        ProductService._authorize(product, user_id, role)
 
         if ProductRepository.has_active_orders(product_id, ACTIVE_ORDER_STATUSES):
             raise ProductHasActiveOrdersError(

@@ -16,11 +16,12 @@ from app.services.product_service import (
     ProductNotFoundError,
     SubCategoryNotFoundError,
     ProductHasActiveOrdersError,
+    ProductPermissionError,
 )
 
 
-def make_product(id=1, name="Laptop"):
-    return SimpleNamespace(id=id, name=name)
+def make_product(id=1, name="Laptop", seller_id=10):
+    return SimpleNamespace(id=id, name=name, seller_id=seller_id)
 
 
 @pytest.fixture
@@ -114,7 +115,7 @@ class TestUpdate:
     def test_not_found(self, repo, sub_category_model):
         repo.get_by_id.return_value = None
         with pytest.raises(ProductNotFoundError):
-            ProductService.update(1, {"name": "New"})
+            ProductService.update(1, {"name": "New"}, user_id=10, role="seller")
 
     def test_no_effective_changes_returns_without_update(
         self, repo, sub_category_model
@@ -122,7 +123,7 @@ class TestUpdate:
         product = make_product()
         repo.get_by_id.return_value = product
 
-        result = ProductService.update(1, {"name": None, "price": None})
+        result = ProductService.update(1, {"name": None, "price": None}, user_id=10, role="seller")
         assert result is product
         repo.update.assert_not_called()
 
@@ -131,7 +132,7 @@ class TestUpdate:
         set_sub_category_lookup(sub_category_model, None)
 
         with pytest.raises(SubCategoryNotFoundError):
-            ProductService.update(1, {"sub_category_id": 99})
+            ProductService.update(1, {"sub_category_id": 99}, user_id=10, role="seller")
         repo.update.assert_not_called()
 
     def test_valid_update(self, repo, sub_category_model):
@@ -139,7 +140,7 @@ class TestUpdate:
         repo.get_by_id.return_value = product
         repo.update.return_value = product
 
-        ProductService.update(1, {"name": "New"})
+        ProductService.update(1, {"name": "New"}, user_id=10, role="seller")
         repo.update.assert_called_once_with(product, {"name": "New"})
 
 
@@ -147,14 +148,14 @@ class TestDelete:
     def test_not_found(self, repo):
         repo.get_by_id.return_value = None
         with pytest.raises(ProductNotFoundError):
-            ProductService.delete(1)
+            ProductService.delete(1, user_id=10, role="seller")
 
     def test_blocked_by_active_orders(self, repo):
         repo.get_by_id.return_value = make_product()
         repo.has_active_orders.return_value = True
 
         with pytest.raises(ProductHasActiveOrdersError):
-            ProductService.delete(1)
+            ProductService.delete(1, user_id=10, role="seller")
         repo.soft_delete.assert_not_called()
 
     def test_success_when_no_active_orders(self, repo):
@@ -162,5 +163,43 @@ class TestDelete:
         repo.get_by_id.return_value = product
         repo.has_active_orders.return_value = False
 
-        ProductService.delete(1)
+        ProductService.delete(1, user_id=10, role="seller")
+        repo.soft_delete.assert_called_once_with(product)
+
+
+class TestOwnership:
+    def test_update_other_sellers_product_forbidden(self, repo, sub_category_model):
+        repo.get_by_id.return_value = make_product(seller_id=10)
+
+        with pytest.raises(ProductPermissionError):
+            ProductService.update(1, {"name": "New"}, user_id=11, role="seller")
+        repo.update.assert_not_called()
+
+    def test_update_admin_allowed(self, repo, sub_category_model):
+        product = make_product(seller_id=10)
+        repo.get_by_id.return_value = product
+        repo.update.return_value = product
+
+        ProductService.update(1, {"name": "New"}, user_id=99, role="admin")
+        repo.update.assert_called_once_with(product, {"name": "New"})
+
+    def test_update_without_identity_forbidden(self, repo, sub_category_model):
+        repo.get_by_id.return_value = make_product(seller_id=10)
+
+        with pytest.raises(ProductPermissionError):
+            ProductService.update(1, {"name": "New"})
+
+    def test_delete_other_sellers_product_forbidden(self, repo):
+        repo.get_by_id.return_value = make_product(seller_id=10)
+
+        with pytest.raises(ProductPermissionError):
+            ProductService.delete(1, user_id=11, role="seller")
+        repo.soft_delete.assert_not_called()
+
+    def test_delete_admin_allowed(self, repo):
+        product = make_product(seller_id=10)
+        repo.get_by_id.return_value = product
+        repo.has_active_orders.return_value = False
+
+        ProductService.delete(1, user_id=99, role="admin")
         repo.soft_delete.assert_called_once_with(product)

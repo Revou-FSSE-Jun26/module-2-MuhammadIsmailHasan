@@ -13,9 +13,10 @@ from app.services.product_service import (
     ProductNotFoundError,
     SubCategoryNotFoundError,
     ProductHasActiveOrdersError,
+    ProductPermissionError,
 )
 from app.auth import roles_required
-from app.utils.auth_context import current_user_id
+from app.utils.auth_context import current_user_id, current_role
 from app.utils.http import make_response, paginate_meta
 
 products_blp = Blueprint(
@@ -98,11 +99,18 @@ class ProductDetail(MethodView):
     @roles_required("seller", "admin")
     def put(self, validated_data, product_id):
         try:
-            product = ProductService.update(product_id, validated_data)
+            product = ProductService.update(
+                product_id,
+                validated_data,
+                user_id=current_user_id(),
+                role=current_role(),
+            )
         except ProductNotFoundError as e:
             abort(404, message=str(e))
         except SubCategoryNotFoundError as e:
             abort(404, message=str(e))
+        except ProductPermissionError as e:
+            abort(403, message=str(e))
 
         return make_response(
             "success update product",
@@ -112,9 +120,13 @@ class ProductDetail(MethodView):
     @roles_required("seller", "admin")
     def delete(self, product_id):
         try:
-            ProductService.delete(product_id)
+            ProductService.delete(
+                product_id, user_id=current_user_id(), role=current_role()
+            )
         except ProductNotFoundError as e:
             abort(404, message=str(e))
+        except ProductPermissionError as e:
+            abort(403, message=str(e))
         except ProductHasActiveOrdersError as e:
             abort(400, message=str(e))
 
