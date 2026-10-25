@@ -235,6 +235,9 @@ See `docs/payment-testing-guide.md` for a full local setup and test walkthrough.
   API prefixes it with `IMAGE_BASE_URL` when it serializes a response, so
   moving between local static files, S3 and a CDN is one environment variable
   and a restart. Values that are already absolute are passed through unchanged.
+- `POST /categories/<id>/image` and `POST /sub-categories/<id>/image` take the
+  same `file` and validation, store the object under `categories/` or
+  `sub-categories/`, and replace (and delete) the previous uploaded image.
 - `POST /products/<id>/images/upload` takes `multipart/form-data` with a `file`
   field. The file type is detected from its magic bytes, not from the filename
   or `Content-Type` the client sends; only JPEG, PNG and WebP are accepted, up
@@ -574,12 +577,14 @@ In short: every route that is not marked **public** needs
 | GET | `/categories/<id>` | Category → sub-categories → product preview | public |
 | PUT | `/categories/<id>` | Update a category | seller, admin |
 | DELETE | `/categories/<id>` | Soft-delete a category | seller, admin |
+| POST | `/categories/<id>/image` | Upload a category image (multipart `file`) | seller, admin |
 | GET | `/sub-categories/` | List sub-categories | public |
 | GET | `/sub-categories/products` | Sub-categories with a product preview | public |
 | POST | `/sub-categories/` | Create a sub-category | seller, admin |
 | GET | `/sub-categories/<id>` | Sub-category with a product preview | public |
 | PUT | `/sub-categories/<id>` | Update a sub-category | seller, admin |
 | DELETE | `/sub-categories/<id>` | Soft-delete a sub-category | seller, admin |
+| POST | `/sub-categories/<id>/image` | Upload a sub-category image (multipart `file`) | seller, admin |
 | GET | `/products/` | List products (filter, sort, paginate) | public |
 | POST | `/products/` | Create a product | seller, admin |
 | GET | `/products/<id>` | Product by ID | public |

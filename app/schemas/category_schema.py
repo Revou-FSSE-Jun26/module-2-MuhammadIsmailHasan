@@ -66,6 +66,14 @@ class UpdateCategorySchema(Schema):
         return data
 
 
+class UploadImageSchema(Schema):
+    file = fields.Raw(
+        required=True,
+        metadata={"type": "string", "format": "binary"},
+        error_messages={"required": "file is required"},
+    )
+
+
 class CategoryResponseSchema(Schema):
     id = fields.Integer()
     name = fields.String()

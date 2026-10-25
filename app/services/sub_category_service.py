@@ -6,6 +6,8 @@ from app.repositories.product_preview_repository import (
 from app.repositories.category_repository import CategoryRepository
 from app.services.category_service import CategoryNotFoundError
 
+from app.services.image_upload import replace_image
+
 
 class SubCategoryNotFoundError(Exception):
     pass
@@ -89,6 +91,16 @@ class SubCategoryService:
             raise SubCategoryNotFoundError("sub category not found")
 
         SubCategoryRepository.soft_delete(sub_category)
+
+    @staticmethod
+    def upload_image(sub_category_id, file_storage):
+        sub_category = SubCategoryRepository.get_by_id(sub_category_id)
+        if not sub_category:
+            raise SubCategoryNotFoundError("sub category not found")
+
+        return replace_image(
+            sub_category, "sub-categories", file_storage, SubCategoryRepository.update
+        )
 
 
 def attach_previews(sub_categories, limit=DEFAULT_PRODUCTS_LIMIT):

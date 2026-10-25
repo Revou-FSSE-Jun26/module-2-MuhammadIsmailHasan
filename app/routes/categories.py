@@ -8,12 +8,15 @@ from app.schemas.category_schema import (
     CategoryResponseSchema,
     CategoryDetailResponseSchema,
     CategoryWithProductsSchema,
+    UploadImageSchema,
 )
 from app.services.category_service import (
     CategoryService,
     CategoryNotFoundError,
     CategoryNameExistsError,
 )
+from app.integrations.s3 import ImageStorageError
+from app.utils.images import InvalidImageError
 from app.auth import roles_required
 from app.utils.http import make_response, paginate_meta
 from app.schemas.preview import ProductsLimitQuerySchema
@@ -131,3 +134,23 @@ class CategoryDetail(MethodView):
             abort(404, message=str(e))
 
         return make_response("success delete category")
+
+
+@categories_blp.route("/<int:category_id>/image")
+class CategoryImageUpload(MethodView):
+    @categories_blp.arguments(UploadImageSchema, location="files")
+    @roles_required("seller", "admin")
+    def post(self, files, category_id):
+        try:
+            category = CategoryService.upload_image(category_id, files.get("file"))
+        except CategoryNotFoundError as e:
+            abort(404, message=str(e))
+        except InvalidImageError as e:
+            abort(422, message=str(e))
+        except ImageStorageError as e:
+            abort(503, message=str(e))
+
+        return make_response(
+            "category image uploaded",
+            CategoryResponseSchema().dump(category),
+        )

@@ -8,7 +8,9 @@ from app.schemas.sub_category_schema import (
     SubCategoryResponseSchema,
     SubCategoryDetailResponseSchema,
 )
-from app.schemas.category_schema import SubCategoryWithProductsSchema
+from app.schemas.category_schema import SubCategoryWithProductsSchema, UploadImageSchema
+from app.integrations.s3 import ImageStorageError
+from app.utils.images import InvalidImageError
 from app.services.sub_category_service import (
     SubCategoryService,
     SubCategoryNotFoundError,
@@ -139,4 +141,26 @@ class SubCategoryListWithProducts(MethodView):
             "get all sub categories with products success",
             SubCategoryWithProductsSchema(many=True).dump(paginated.items),
             pagination=paginate_meta(paginated),
+        )
+
+
+@sub_categories_blp.route("/<int:sub_category_id>/image")
+class SubCategoryImageUpload(MethodView):
+    @sub_categories_blp.arguments(UploadImageSchema, location="files")
+    @roles_required("seller", "admin")
+    def post(self, files, sub_category_id):
+        try:
+            sub_category = SubCategoryService.upload_image(
+                sub_category_id, files.get("file")
+            )
+        except SubCategoryNotFoundError as e:
+            abort(404, message=str(e))
+        except InvalidImageError as e:
+            abort(422, message=str(e))
+        except ImageStorageError as e:
+            abort(503, message=str(e))
+
+        return make_response(
+            "sub category image uploaded",
+            SubCategoryResponseSchema().dump(sub_category),
         )

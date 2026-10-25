@@ -1,4 +1,5 @@
 from app.repositories.category_repository import CategoryRepository
+from app.services.image_upload import replace_image
 from app.repositories.product_preview_repository import (
     DEFAULT_PRODUCTS_LIMIT,
     ProductPreviewRepository,
@@ -86,3 +87,13 @@ class CategoryService:
             raise CategoryNotFoundError("category not found")
 
         CategoryRepository.soft_delete(category)
+
+    @staticmethod
+    def upload_image(category_id, file_storage):
+        category = CategoryRepository.get_by_id(category_id)
+        if not category:
+            raise CategoryNotFoundError("category not found")
+
+        return replace_image(
+            category, "categories", file_storage, CategoryRepository.update
+        )

@@ -30,6 +30,14 @@ def build_product_key(product_id, extension):
     return f"{PRODUCT_PREFIX}/{product_id}/{uuid.uuid4().hex}.{extension}"
 
 
+def build_key(prefix, owner_id, extension):
+    return f"{prefix}/{owner_id}/{uuid.uuid4().hex}.{extension}"
+
+
+def is_managed_key(value, prefix):
+    return bool(value) and value.startswith(f"{prefix}/")
+
+
 def upload(stream, key, content_type):
     try:
         _client().upload_fileobj(
