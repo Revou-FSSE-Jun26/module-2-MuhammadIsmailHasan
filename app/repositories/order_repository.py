@@ -1,6 +1,6 @@
 from sqlalchemy.orm import selectinload
 
-from app.models.orders import Order, OrderItem
+from app.models.orders import Order, OrderItem, OrderStatusHistory
 from app.models.products import Product
 from app.models.product_images import ProductImage
 from app.extensions import db
@@ -14,6 +14,9 @@ class OrderRepository:
         selectinload(Order.items)
         .selectinload(OrderItem.product)
         .options(selectinload(Product.images), selectinload(Product.seller))
+    )
+    _history_load = selectinload(Order.status_history).selectinload(
+        OrderStatusHistory.changed_by_user
     )
     _items_load = (
         selectinload(Order.items)
@@ -63,7 +66,7 @@ class OrderRepository:
     def get_by_id(order_id):
         return (
             Order.query
-            .options(OrderRepository._detail_load)
+            .options(OrderRepository._detail_load, OrderRepository._history_load)
             .filter_by(id=order_id)
             .first()
         )
@@ -83,6 +86,13 @@ class OrderRepository:
         )
         db.session.add(order)
         db.session.flush()
+
+        db.session.add(OrderStatusHistory(
+            order_id=order.id,
+            from_status=None,
+            to_status=order.status or 'waiting_for_payment',
+            changed_by=user_id,
+        ))
 
         for item_data in items_data:
             order_item = OrderItem(
@@ -122,8 +132,16 @@ class OrderRepository:
 
     @staticmethod
     def update_status(order, new_status, updated_by=None, tracking_id=None, restock=False):
+        previous_status = order.status
         order.status = new_status
         order.updated_by = updated_by
+        db.session.add(OrderStatusHistory(
+            order_id=order.id,
+            from_status=previous_status,
+            to_status=new_status,
+            changed_by=updated_by,
+            tracking_id=tracking_id,
+        ))
         if tracking_id is not None:
             order.tracking_id = tracking_id
 

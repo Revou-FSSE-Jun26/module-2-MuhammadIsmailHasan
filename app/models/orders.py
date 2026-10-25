@@ -38,6 +38,13 @@ class Order(db.Model):
     items = db.relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
     updated_by_user = db.relationship('User', foreign_keys=[updated_by], lazy=True)
     payments = db.relationship('Payment', back_populates='order', lazy='selectin')
+    status_history = db.relationship(
+        'OrderStatusHistory',
+        backref='order',
+        lazy=True,
+        cascade='all, delete-orphan',
+        order_by='OrderStatusHistory.created_at.asc(), OrderStatusHistory.id.asc()',
+    )
 
     def to_dict(self):
         return {
@@ -91,3 +98,17 @@ class OrderItem(db.Model):
             'quantity': self.quantity,
             'sub_total': float(self.sub_total) if self.sub_total is not None else None
         }
+
+
+class OrderStatusHistory(db.Model):
+    __tablename__ = 'order_status_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id', ondelete='CASCADE', name='fk_order_status_history_order_id'), nullable=False, index=True)
+    from_status = db.Column(db.String(25), nullable=True)
+    to_status = db.Column(db.String(25), nullable=False)
+    changed_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_order_status_history_changed_by'), nullable=True, index=True)
+    tracking_id = db.Column(db.String(100), nullable=True)
+    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+
+    changed_by_user = db.relationship('User', foreign_keys=[changed_by], lazy=True)

@@ -96,18 +96,36 @@ class OrderItemProductSchema(Schema):
 class OrderItemResponseSchema(Schema):
     id = fields.Integer()
     product_id = fields.Integer()
-    product_name = fields.String()
+    product_name = fields.Method('get_product_name')
     unit_price = fields.Float()
     quantity = fields.Integer()
     sub_total = fields.Float()
     product = fields.Nested(OrderItemProductSchema, allow_none=True)
     seller = fields.Method('get_seller')
 
+    def get_product_name(self, obj):
+        return obj.product.name if obj.product else None
+
     def get_seller(self, obj):
         product = obj.product
         if product is None or product.seller is None:
             return None
         return SellerBriefSchema().dump(product.seller)
+
+
+class StatusHistorySchema(Schema):
+    id = fields.Integer()
+    from_status = fields.String(allow_none=True)
+    to_status = fields.String()
+    tracking_id = fields.String(allow_none=True)
+    created_at = fields.DateTime(format='iso')
+    changed_by = fields.Method('get_changed_by')
+
+    def get_changed_by(self, obj):
+        user = obj.changed_by_user
+        if user is None:
+            return None
+        return {'id': user.id, 'name': user.username, 'role': user.role}
 
 
 class OrderResponseSchema(Schema):
@@ -157,6 +175,7 @@ class OrderDetailResponseSchema(Schema):
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')
     items = fields.List(fields.Nested(OrderItemResponseSchema))
+    status_history = fields.List(fields.Nested(StatusHistorySchema))
     seller = fields.Method('get_seller')
 
     def get_seller(self, obj):

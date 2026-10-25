@@ -651,3 +651,67 @@ class TestOrderItemProductDetail:
 
         assert 'items' not in target
         assert 'product' not in target
+
+
+class TestStatusHistory:
+
+    def test_detail_has_initial_history_entry_for_checkout(self, client, db, seed_users, seed_products):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+        created = client.post('/api/v1/orders/', json={
+            'items': [{'product_id': seed_products[0].id, 'quantity': 1}]
+        }, headers=auth_header(token))
+        order_id = created.get_json()['data']['id']
+
+        detail = client.get(f'/api/v1/orders/{order_id}', headers=auth_header(token))
+        history = detail.get_json()['data']['status_history']
+
+        assert len(history) == 1
+        assert history[0]['from_status'] is None
+        assert history[0]['to_status'] == 'waiting_for_payment'
+        assert history[0]['changed_by']['name'] == 'buyer_test'
+
+    def test_status_change_appends_history_in_order(self, client, db, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        client.put(f'/api/v1/orders/{seed_order.id}', json={'status': 'paid'}, headers=auth_header(token))
+        client.put(f'/api/v1/orders/{seed_order.id}', json={'status': 'processing'}, headers=auth_header(token))
+        client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'shipped', 'tracking_id': 'JNE-1'
+        }, headers=auth_header(token))
+
+        detail = client.get(f'/api/v1/orders/{seed_order.id}', headers=auth_header(token))
+        history = detail.get_json()['data']['status_history']
+        pairs = [(h['from_status'], h['to_status']) for h in history if h['from_status']]
+
+        assert pairs == [
+            ('waiting_for_payment', 'paid'),
+            ('paid', 'processing'),
+            ('processing', 'shipped'),
+        ]
+        assert history[-1]['tracking_id'] == 'JNE-1'
+        assert history[-1]['changed_by'] == {
+            'id': seed_users['seller'].id, 'name': 'seller_test', 'role': 'seller'
+        }
+
+    def test_rejected_change_does_not_write_history(self, client, db, seed_users, seed_order):
+        token = get_auth_token(client, 'seller@test.com', 'password123')
+
+        response = client.put(f'/api/v1/orders/{seed_order.id}', json={
+            'status': 'delivered'
+        }, headers=auth_header(token))
+        assert response.status_code == 400
+
+        from app.models.orders import OrderStatusHistory
+        assert OrderStatusHistory.query.filter_by(order_id=seed_order.id).count() == 0
+
+
+class TestOrderItemName:
+
+    def test_item_includes_product_name(self, client, seed_users, seed_order):
+        token = get_auth_token(client, 'buyer@test.com', 'password123')
+
+        detail = client.get(f'/api/v1/orders/{seed_order.id}', headers=auth_header(token))
+        listing = client.get('/api/v1/orders/', headers=auth_header(token))
+
+        assert detail.get_json()['data']['items'][0]['product_name'] == 'Laptop'
+        assert listing.get_json()['data'][0]['items'][0]['product_name'] == 'Laptop'
