@@ -107,7 +107,7 @@ class CartCheckout(MethodView):
         user_id = current_user_id()
 
         try:
-            order = CartService.checkout(
+            orders = CartService.checkout(
                 user_id,
                 seller_id=validated_data.get('seller_id'),
                 cart_item_ids=validated_data.get('cart_item_ids'),
@@ -129,11 +129,13 @@ class CartCheckout(MethodView):
             abort(404, message=str(e))
 
         current_app.logger.info(
-            'order %s placed via cart checkout by user %s', order.id, user_id
+            'orders %s placed via cart checkout by user %s',
+            [order.id for order in orders],
+            user_id,
         )
 
         return make_response(
             'checkout success',
-            OrderDetailResponseSchema().dump(order),
+            OrderDetailResponseSchema(many=True).dump(orders),
             201,
         )

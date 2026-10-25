@@ -115,12 +115,7 @@ class OrderService:
         }
 
     @staticmethod
-    def create(user_id, data):
-        shipping = OrderService._resolve_shipping_address(
-            user_id, data.get('address_id')
-        )
-
-        items_input = data['items']
+    def _build_items(items_input):
         items_data = []
 
         for item in items_input:
@@ -148,7 +143,29 @@ class OrderService:
                 'sub_total': sub_total,
             })
 
+        return items_data
+
+    @staticmethod
+    def create(user_id, data):
+        shipping = OrderService._resolve_shipping_address(
+            user_id, data.get('address_id')
+        )
+        items_data = OrderService._build_items(data['items'])
+
         return OrderRepository.create(user_id, items_data, shipping)
+
+    @staticmethod
+    def create_many(user_id, data):
+        shipping = OrderService._resolve_shipping_address(
+            user_id, data.get('address_id')
+        )
+        items_data = OrderService._build_items(data['items'])
+
+        groups = {}
+        for item in items_data:
+            groups.setdefault(item['product'].seller_id, []).append(item)
+
+        return OrderRepository.create_many(user_id, list(groups.values()), shipping)
 
     @staticmethod
     def change_address(order_id, address_id, user_id):

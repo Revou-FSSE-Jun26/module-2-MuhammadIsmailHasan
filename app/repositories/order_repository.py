@@ -10,8 +10,16 @@ from decimal import Decimal
 
 class OrderRepository:
 
-    _detail_load = selectinload(Order.items).selectinload(OrderItem.product).selectinload(Product.images)
-    _items_load = selectinload(Order.items)
+    _detail_load = (
+        selectinload(Order.items)
+        .selectinload(OrderItem.product)
+        .options(selectinload(Product.images), selectinload(Product.seller))
+    )
+    _items_load = (
+        selectinload(Order.items)
+        .selectinload(OrderItem.product)
+        .options(selectinload(Product.images), selectinload(Product.seller))
+    )
 
     @staticmethod
     def get_all(user_id=None, seller_id=None, filters=None, sort_by='id', order='desc', page=1, limit=10):
@@ -65,7 +73,7 @@ class OrderRepository:
         return Order.query.filter_by(id=order_id, is_active=True).first()
 
     @staticmethod
-    def create(user_id, items_data, shipping=None):
+    def _add(user_id, items_data, shipping=None):
         total_amount = sum(item['sub_total'] for item in items_data)
 
         order = Order(
@@ -87,8 +95,23 @@ class OrderRepository:
             db.session.add(order_item)
             item_data['product'].stock -= item_data['quantity']
 
+        return order
+
+    @staticmethod
+    def create(user_id, items_data, shipping=None):
+        order = OrderRepository._add(user_id, items_data, shipping)
         db.session.commit()
         return order
+
+    @staticmethod
+    def create_many(user_id, groups, shipping=None):
+        try:
+            orders = [OrderRepository._add(user_id, items, shipping) for items in groups]
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+        return orders
 
     @staticmethod
     def update_shipping(order, shipping):

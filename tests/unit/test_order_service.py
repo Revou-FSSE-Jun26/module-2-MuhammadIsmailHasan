@@ -479,3 +479,31 @@ class TestChangeAddress:
 
         with pytest.raises(OrderNotFoundError):
             OrderService.change_address(3, address_id=5, user_id=1)
+
+
+class TestCreateMany:
+    def test_groups_items_by_seller(self, repo, address_repo):
+        p1 = SimpleNamespace(id=1, name='A', price=Decimal('10.00'), stock=5, seller_id=10)
+        p2 = SimpleNamespace(id=2, name='B', price=Decimal('20.00'), stock=5, seller_id=20)
+        p3 = SimpleNamespace(id=3, name='C', price=Decimal('30.00'), stock=5, seller_id=10)
+        products = {1: p1, 2: p2, 3: p3}
+        repo.get_product_by_id.side_effect = lambda pid: products[pid]
+        repo.create_many.return_value = []
+
+        OrderService.create_many(1, {'items': [
+            {'product_id': 1, 'quantity': 1},
+            {'product_id': 2, 'quantity': 1},
+            {'product_id': 3, 'quantity': 2},
+        ]})
+
+        groups = repo.create_many.call_args.args[1]
+        assert len(groups) == 2
+        assert sorted(len(g) for g in groups) == [1, 2]
+
+    def test_insufficient_stock_creates_nothing(self, repo, address_repo):
+        product = SimpleNamespace(id=1, name='A', price=Decimal('10.00'), stock=1, seller_id=10)
+        repo.get_product_by_id.return_value = product
+
+        with pytest.raises(InsufficientStockError):
+            OrderService.create_many(1, {'items': [{'product_id': 1, 'quantity': 5}]})
+        repo.create_many.assert_not_called()

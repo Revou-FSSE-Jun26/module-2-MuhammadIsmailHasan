@@ -1,4 +1,5 @@
 from marshmallow import Schema, fields, validate, validates, ValidationError
+from app.schemas.seller_schema import SellerBriefSchema, order_seller
 from app.utils.images import build_image_url
 
 
@@ -100,6 +101,13 @@ class OrderItemResponseSchema(Schema):
     quantity = fields.Integer()
     sub_total = fields.Float()
     product = fields.Nested(OrderItemProductSchema, allow_none=True)
+    seller = fields.Method('get_seller')
+
+    def get_seller(self, obj):
+        product = obj.product
+        if product is None or product.seller is None:
+            return None
+        return SellerBriefSchema().dump(product.seller)
 
 
 class OrderResponseSchema(Schema):
@@ -118,6 +126,11 @@ class OrderResponseSchema(Schema):
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')
     refund_note = fields.String(allow_none=True)
+    items = fields.List(fields.Nested(OrderItemResponseSchema))
+    seller = fields.Method('get_seller')
+
+    def get_seller(self, obj):
+        return order_seller(obj)
 
     def get_total_items(self, obj):
         return len(obj.items)
@@ -144,6 +157,10 @@ class OrderDetailResponseSchema(Schema):
     total_items = fields.Method('get_total_items')
     total_quantity = fields.Method('get_total_quantity')
     items = fields.List(fields.Nested(OrderItemResponseSchema))
+    seller = fields.Method('get_seller')
+
+    def get_seller(self, obj):
+        return order_seller(obj)
 
     def get_total_items(self, obj):
         return len(obj.items)

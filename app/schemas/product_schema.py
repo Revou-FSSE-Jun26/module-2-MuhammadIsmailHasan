@@ -2,6 +2,7 @@ from marshmallow import Schema, fields, validate, validates, ValidationError, pr
 
 from app.utils.text import strip_or_none
 from app.schemas.fields import ImageUrlField
+from app.schemas.seller_schema import SellerBriefSchema
 from app.utils.images import build_image_url
 
 
@@ -147,6 +148,7 @@ class ProductResponseSchema(Schema):
     stock = fields.Integer()
     image = fields.Method("get_primary_image")
     sub_category = fields.Nested(SubCategoryBriefSchema, allow_none=True)
+    seller = fields.Nested(SellerBriefSchema, allow_none=True)
 
     def get_primary_image(self, obj):
         primary = obj.primary_image
@@ -175,6 +177,7 @@ class ProductDetailResponseSchema(Schema):
     stock = fields.Integer()
     description = fields.String()
     seller_id = fields.Integer(allow_none=True)
+    seller = fields.Nested(SellerBriefSchema, allow_none=True)
     created_at = fields.DateTime(format="iso")
     is_active = fields.Boolean()
     sub_category = fields.Nested(SubCategoryInProductSchema, allow_none=True)

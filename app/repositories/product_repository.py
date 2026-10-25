@@ -9,9 +9,9 @@ from app.extensions import db
 class ProductRepository:
     @staticmethod
     def get_all(filters=None, sort_by="id", order="asc", page=1, limit=10):
-        query = Product.query.options(joinedload(Product.sub_category)).filter_by(
-            is_active=True
-        )
+        query = Product.query.options(
+            joinedload(Product.sub_category), joinedload(Product.seller)
+        ).filter_by(is_active=True)
 
         if filters:
             if filters.get("name"):

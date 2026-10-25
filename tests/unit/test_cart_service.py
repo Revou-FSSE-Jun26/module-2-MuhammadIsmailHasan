@@ -261,13 +261,13 @@ class TestCheckout:
         product = make_product(stock=10, is_active=True)
         cart = make_cart(items=[make_item(product=product, quantity=2)])
         repo.get_active_cart.return_value = cart
-        order_service.create.return_value = SimpleNamespace(id=42)
+        order_service.create_many.return_value = [SimpleNamespace(id=42)]
 
-        order = CartService.checkout(1)
+        orders = CartService.checkout(1)
 
-        assert order.id == 42
-        order_service.create.assert_called_once()
-        called_args = order_service.create.call_args
+        assert [o.id for o in orders] == [42]
+        order_service.create_many.assert_called_once()
+        called_args = order_service.create_many.call_args
         assert called_args.args[0] == 1
         assert called_args.args[1] == {
             'items': [{'product_id': product.id, 'quantity': 2}],
@@ -283,7 +283,7 @@ class TestCheckout:
             make_item(id=2, product=p2, quantity=2),
         ])
         repo.get_active_cart.return_value = cart
-        order_service.create.return_value = SimpleNamespace(id=99)
+        order_service.create_many.return_value = [SimpleNamespace(id=99)]
 
         CartService.checkout(1)
 
@@ -298,7 +298,7 @@ class TestCheckout:
 
         with pytest.raises(ProductUnavailableError):
             CartService.checkout(1)
-        order_service.create.assert_not_called()
+        order_service.create_many.assert_not_called()
         repo.delete_items_by_product_ids.assert_not_called()
 
     def test_checkout_insufficient_stock(self, repo, order_service):
@@ -308,7 +308,7 @@ class TestCheckout:
 
         with pytest.raises(InsufficientStockError):
             CartService.checkout(1)
-        order_service.create.assert_not_called()
+        order_service.create_many.assert_not_called()
 
 
 class TestCheckoutSelection:
@@ -325,11 +325,11 @@ class TestCheckoutSelection:
 
     def test_checkout_by_seller_orders_only_that_seller(self, repo, order_service):
         cart, p_alice, _ = self._two_seller_cart(repo)
-        order_service.create.return_value = SimpleNamespace(id=1)
+        order_service.create_many.return_value = [SimpleNamespace(id=1)]
 
         CartService.checkout(1, seller_id=10)
 
-        payload = order_service.create.call_args.args[1]
+        payload = order_service.create_many.call_args.args[1]
         assert payload == {
             'items': [{'product_id': p_alice.id, 'quantity': 2}],
             'address_id': None,
@@ -340,15 +340,15 @@ class TestCheckoutSelection:
         self._two_seller_cart(repo)
         with pytest.raises(CartSelectionError):
             CartService.checkout(1, seller_id=999)
-        order_service.create.assert_not_called()
+        order_service.create_many.assert_not_called()
 
     def test_checkout_by_item_ids(self, repo, order_service):
         cart, _, p_charlie = self._two_seller_cart(repo)
-        order_service.create.return_value = SimpleNamespace(id=1)
+        order_service.create_many.return_value = [SimpleNamespace(id=1)]
 
         CartService.checkout(1, cart_item_ids=[2])
 
-        payload = order_service.create.call_args.args[1]
+        payload = order_service.create_many.call_args.args[1]
         assert payload == {
             'items': [{'product_id': p_charlie.id, 'quantity': 3}],
             'address_id': None,
@@ -359,15 +359,15 @@ class TestCheckoutSelection:
         self._two_seller_cart(repo)
         with pytest.raises(CartSelectionError):
             CartService.checkout(1, cart_item_ids=[2, 999])
-        order_service.create.assert_not_called()
+        order_service.create_many.assert_not_called()
 
     def test_full_checkout_when_no_selection(self, repo, order_service):
         cart, p_alice, p_charlie = self._two_seller_cart(repo)
-        order_service.create.return_value = SimpleNamespace(id=1)
+        order_service.create_many.return_value = [SimpleNamespace(id=1)]
 
         CartService.checkout(1)
 
-        payload = order_service.create.call_args.args[1]
+        payload = order_service.create_many.call_args.args[1]
         assert len(payload['items']) == 2
         removed = repo.delete_items_by_product_ids.call_args.args[1]
         assert set(removed) == {p_alice.id, p_charlie.id}

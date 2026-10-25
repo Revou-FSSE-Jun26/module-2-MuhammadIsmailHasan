@@ -191,6 +191,16 @@ class TestGetProduct:
         assert data["data"]["name"] == "Laptop"
         assert "sub_category" in data["data"]
 
+    def test_product_includes_seller(self, client, seed_users, seed_products):
+        product = seed_products[0]
+
+        detail = client.get(f"/api/v1/products/{product.id}").get_json()["data"]
+        listing = client.get("/api/v1/products/").get_json()["data"]
+
+        expected = {"id": seed_users["seller"].id, "name": "seller_test"}
+        assert detail["seller"] == expected
+        assert all(item["seller"] == expected for item in listing)
+
     def test_get_product_not_found(self, client, seed_users):
         token = get_auth_token(client, "buyer@test.com", "password123")
 

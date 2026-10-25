@@ -159,13 +159,13 @@ class CartService:
             items_payload.append({'product_id': item.product_id, 'quantity': item.quantity})
             ordered_product_ids.append(item.product_id)
 
-        order = OrderService.create(
+        orders = OrderService.create_many(
             user_id, {'items': items_payload, 'address_id': address_id}
         )
 
         CartRepository.delete_items_by_product_ids(cart, ordered_product_ids)
 
-        return order
+        return orders
 
     @staticmethod
     def _build_item_view(item):

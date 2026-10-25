@@ -263,9 +263,10 @@ class TestCheckout:
         data = response.get_json()
 
         assert response.status_code == 201
-        assert data['data']['status'] == 'waiting_for_payment'
-        assert len(data['data']['items']) == 1
-        assert data['data']['items'][0]['quantity'] == 2
+        assert len(data['data']) == 1
+        assert data['data'][0]['status'] == 'waiting_for_payment'
+        assert len(data['data'][0]['items']) == 1
+        assert data['data'][0]['items'][0]['quantity'] == 2
 
         cart = client.get('/api/v1/cart', headers=auth_header(token)).get_json()
         assert cart['data']['total_items'] == 0
@@ -414,8 +415,9 @@ class TestPartialCheckout:
         data = response.get_json()
 
         assert response.status_code == 201
-        assert data['data']['items'][0]['product_id'] == s1_product.id
-        assert len(data['data']['items']) == 1
+        assert len(data['data']) == 1
+        assert data['data'][0]['items'][0]['product_id'] == s1_product.id
+        assert len(data['data'][0]['items']) == 1
 
         cart = client.get('/api/v1/cart', headers=auth_header(token)).get_json()['data']
         assert cart['total_items'] == 1
@@ -435,10 +437,57 @@ class TestPartialCheckout:
         data = response.get_json()
 
         assert response.status_code == 201
-        assert data['data']['items'][0]['product_id'] == first_item['product_id']
+        assert data['data'][0]['items'][0]['product_id'] == first_item['product_id']
 
         after = client.get('/api/v1/cart', headers=auth_header(token)).get_json()['data']
         assert after['total_items'] == 1
+
+    def test_full_checkout_splits_orders_per_seller(
+        self, client, seed_users, seed_products, db
+    ):
+        token = _buyer_token(client)
+        s1_product, s2_product = self._two_seller_cart(
+            client, token, seed_users, seed_products, db
+        )
+
+        response = client.post('/api/v1/cart/checkout', headers=auth_header(token))
+        orders = response.get_json()['data']
+
+        assert response.status_code == 201
+        assert len(orders) == 2
+        assert {o['seller']['id'] for o in orders} == {
+            seed_users['seller'].id, seed_users['seller2'].id,
+        }
+        for order in orders:
+            assert order['status'] == 'waiting_for_payment'
+            assert len(order['items']) == 1
+        by_seller = {o['seller']['id']: o for o in orders}
+        assert by_seller[seed_users['seller'].id]['items'][0]['product_id'] == s1_product.id
+        assert by_seller[seed_users['seller2'].id]['total_amount'] == float(s2_product.price) * 2
+
+        cart = client.get('/api/v1/cart', headers=auth_header(token)).get_json()
+        assert cart['data']['total_items'] == 0
+
+    def test_split_checkout_is_all_or_nothing(
+        self, client, seed_users, seed_products, db
+    ):
+        token = _buyer_token(client)
+        s1_product, s2_product = self._two_seller_cart(
+            client, token, seed_users, seed_products, db
+        )
+        s1_stock = s1_product.stock
+        s2_product.stock = 0
+        db.session.commit()
+
+        response = client.post('/api/v1/cart/checkout', headers=auth_header(token))
+
+        assert response.status_code == 422
+        db.session.refresh(s1_product)
+        assert s1_product.stock == s1_stock
+        orders = client.get('/api/v1/orders/', headers=auth_header(token)).get_json()
+        assert orders['data'] == []
+        cart = client.get('/api/v1/cart', headers=auth_header(token)).get_json()
+        assert cart['data']['total_items'] == 2
 
     def test_checkout_by_seller_no_match(self, client, seed_users, seed_products):
         token = _buyer_token(client)
