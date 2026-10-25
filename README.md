@@ -136,6 +136,10 @@ stateDiagram-v2
   adds a refund note to the response.
 - **Shipping needs a tracking ID.** The `processing → shipped` move must carry a
   `tracking_id`; it is frozen once set and ignored on any other transition.
+- **Status history.** Every order records each status change in
+  `order_status_history` (from, to, who, tracking ID, time), starting with
+  `null → waiting_for_payment` at checkout. `GET /orders/<id>` returns it as
+  `status_history`, oldest first.
 - **Soft delete — `DELETE /orders/<id>`.** Housekeeping only: flips `is_active`
   off and stamps `deleted_at`. It does **not** change status or restock, and is
   allowed only once an order is no longer in flight (`delivered`, `returned`,
@@ -277,6 +281,8 @@ See `docs/payment-testing-guide.md` for a full local setup and test walkthrough.
   `seller: {id, name}` on the order and on each item; product responses carry
   `seller` too, where `name` is the seller's username. Order lists include
   `items` so clients can render thumbnails without a second request.
+- Product lists include `sold_count` (units in orders that are not cancelled or
+  returned); `sort_by=best_selling` orders by it.
 
 </details>
 
@@ -363,7 +369,7 @@ run.py · pytest.ini · requirements.txt
 
 `users`, `user_profiles`, `user_addresses`, `categories`, `products`,
 `product_images`, `orders` (with a `shipping_*` snapshot, `tracking_id`, and
-`deleted_at`), `order_items`, `carts`, `cart_items`, `payments` (one order to
+`deleted_at`), `order_items`, `order_status_history`, `carts`, `cart_items`, `payments` (one order to
 many attempts, referencing `orders`).
 
 ![Schema Diagram](./images/diagram-6.png)
@@ -655,7 +661,7 @@ Shared by `GET /products/`, `/categories/`, `/sub-categories/`, `/orders/`
 | `seller_id` | int | — | Filter by seller |
 | `min_price` | float | — | Minimum price |
 | `max_price` | float | — | Maximum price |
-| `sort_by` | string | `id` | `id`, `name`, `price`, `created_at` |
+| `sort_by` | string | `id` | `id`, `name`, `price`, `created_at`, `best_selling` |
 | `order` | string | `asc` | `asc`, `desc` |
 | `page` / `limit` | int | `1` / `10` | Pagination |
 
