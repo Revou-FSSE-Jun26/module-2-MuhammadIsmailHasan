@@ -81,7 +81,8 @@ Docker setup for both development and production.
   losing the order.
 - **Shopping cart** — one lazy cart per buyer, grouped by seller, with
   live-computed totals and availability, plus whole / per-seller / partial
-  checkout.
+  checkout. Checkout places **one order per seller**, so each seller fulfills
+  and updates the status of its own order.
 - **Platform** — a uniform JSON response envelope, centralized error handling,
   daily-rotating logs, a health check, and OpenAPI/Swagger docs.
 
@@ -266,8 +267,16 @@ See `docs/payment-testing-guide.md` for a full local setup and test walkthrough.
 - The cart is grouped by seller with per-group and grand totals.
 - **Checkout** reuses order-creation logic, then removes only the ordered items.
   An optional body narrows the scope: `seller_id` (one group) or `cart_item_ids`
-  (chosen lines) — mutually exclusive — plus an optional `address_id`. Each
-  checkout produces a single order.
+  (chosen lines) — mutually exclusive — plus an optional `address_id`.
+- **One order per seller.** The selected lines are split by seller and each group
+  becomes its own order with its own status, tracking id and payment. The
+  response `data` is a **list of orders** (one element when only one seller is
+  involved). All orders are created in one transaction: if any line fails
+  (stock, availability), no order is created and no stock is deducted.
+- Order responses (`GET /orders`, `GET /orders/{id}`, checkout) carry
+  `seller: {id, name}` on the order and on each item; product responses carry
+  `seller` too, where `name` is the seller's username. Order lists include
+  `items` so clients can render thumbnails without a second request.
 
 </details>
 
