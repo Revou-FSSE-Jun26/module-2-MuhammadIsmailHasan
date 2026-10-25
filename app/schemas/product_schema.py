@@ -14,7 +14,7 @@ class ProductQuerySchema(Schema):
     max_price = fields.Float(load_default=None)
     sort_by = fields.String(
         load_default="id",
-        validate=validate.OneOf(["id", "name", "price", "created_at"]),
+        validate=validate.OneOf(["id", "name", "price", "created_at", "best_selling"]),
     )
     order = fields.String(
         load_default="asc",
@@ -146,6 +146,7 @@ class ProductResponseSchema(Schema):
     slug = fields.String()
     price = fields.Float()
     stock = fields.Integer()
+    sold_count = fields.Integer(dump_default=0)
     image = fields.Method("get_primary_image")
     sub_category = fields.Nested(SubCategoryBriefSchema, allow_none=True)
     seller = fields.Nested(SellerBriefSchema, allow_none=True)

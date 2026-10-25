@@ -437,3 +437,57 @@ class TestDeleteProduct:
 
         assert response.status_code == 400
         assert "active orders" in response.get_json()["message"]
+
+
+class TestBestSelling:
+    def _order(self, db, buyer, product, quantity, status):
+        from app.models.orders import Order, OrderItem
+
+        order = Order(user_id=buyer.id, total_amount=10, status=status)
+        db.session.add(order)
+        db.session.flush()
+        db.session.add(
+            OrderItem(
+                order_id=order.id,
+                product_id=product.id,
+                unit_price=10,
+                quantity=quantity,
+                sub_total=10 * quantity,
+            )
+        )
+        db.session.commit()
+
+    def test_sort_best_selling_desc_and_sold_count(
+        self, client, db, seed_users, seed_products
+    ):
+        laptop, shirt = seed_products
+        buyer = seed_users["buyer"]
+        self._order(db, buyer, shirt, 3, "paid")
+        self._order(db, buyer, shirt, 2, "delivered")
+        self._order(db, buyer, laptop, 1, "processing")
+
+        response = client.get("/api/v1/products/?sort_by=best_selling&order=desc")
+        items = response.get_json()["data"]
+
+        assert response.status_code == 200
+        assert [i["name"] for i in items] == ["T-Shirt", "Laptop"]
+        assert [i["sold_count"] for i in items] == [5, 1]
+
+    def test_cancelled_and_returned_orders_do_not_count(
+        self, client, db, seed_users, seed_products
+    ):
+        laptop, shirt = seed_products
+        buyer = seed_users["buyer"]
+        self._order(db, buyer, shirt, 9, "cancelled")
+        self._order(db, buyer, shirt, 9, "returned")
+        self._order(db, buyer, laptop, 1, "paid")
+
+        response = client.get("/api/v1/products/?sort_by=best_selling&order=desc")
+        items = response.get_json()["data"]
+
+        assert items[0]["name"] == "Laptop"
+        assert {i["name"]: i["sold_count"] for i in items} == {"Laptop": 1, "T-Shirt": 0}
+
+    def test_sold_count_defaults_to_zero(self, client, seed_products):
+        response = client.get("/api/v1/products/")
+        assert all(i["sold_count"] == 0 for i in response.get_json()["data"])

@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.models.products import Product
@@ -25,20 +26,56 @@ class ProductRepository:
             if filters.get("max_price") is not None:
                 query = query.filter(Product.price <= filters["max_price"])
 
-        sort_columns = {
-            "id": Product.id,
-            "name": Product.name,
-            "price": Product.price,
-            "created_at": Product.created_at,
-        }
-        sort_column = sort_columns.get(sort_by, Product.id)
+        if sort_by == "best_selling":
+            sold = ProductRepository._sold_subquery()
+            sort_column = func.coalesce(sold.c.sold, 0)
+            query = query.outerjoin(sold, sold.c.product_id == Product.id)
+        else:
+            sort_columns = {
+                "id": Product.id,
+                "name": Product.name,
+                "price": Product.price,
+                "created_at": Product.created_at,
+            }
+            sort_column = sort_columns.get(sort_by, Product.id)
 
         if order == "desc":
-            query = query.order_by(sort_column.desc())
+            query = query.order_by(sort_column.desc(), Product.id.desc())
         else:
-            query = query.order_by(sort_column.asc())
+            query = query.order_by(sort_column.asc(), Product.id.asc())
 
-        return query.paginate(page=page, per_page=limit, error_out=False)
+        paginated = query.paginate(page=page, per_page=limit, error_out=False)
+        ProductRepository._attach_sold_count(paginated.items)
+        return paginated
+
+    @staticmethod
+    def _sold_subquery():
+        return (
+            db.session.query(
+                OrderItem.product_id.label("product_id"),
+                func.sum(OrderItem.quantity).label("sold"),
+            )
+            .join(Order, Order.id == OrderItem.order_id)
+            .filter(
+                Order.is_active == True,
+                Order.status.notin_(["cancelled", "returned"]),
+            )
+            .group_by(OrderItem.product_id)
+            .subquery()
+        )
+
+    @staticmethod
+    def _attach_sold_count(products):
+        ids = [p.id for p in products]
+        counts = {}
+        if ids:
+            sold = ProductRepository._sold_subquery()
+            rows = db.session.query(sold.c.product_id, sold.c.sold).filter(
+                sold.c.product_id.in_(ids)
+            ).all()
+            counts = {pid: int(total) for pid, total in rows}
+        for p in products:
+            p.sold_count = counts.get(p.id, 0)
 
     @staticmethod
     def get_by_id(product_id):
@@ -89,20 +126,27 @@ class ProductRepository:
     ):
         query = Product.query.filter_by(sub_category_id=sub_category_id, is_active=True)
 
-        sort_columns = {
-            "id": Product.id,
-            "name": Product.name,
-            "price": Product.price,
-            "created_at": Product.created_at,
-        }
-        sort_column = sort_columns.get(sort_by, Product.id)
+        if sort_by == "best_selling":
+            sold = ProductRepository._sold_subquery()
+            sort_column = func.coalesce(sold.c.sold, 0)
+            query = query.outerjoin(sold, sold.c.product_id == Product.id)
+        else:
+            sort_columns = {
+                "id": Product.id,
+                "name": Product.name,
+                "price": Product.price,
+                "created_at": Product.created_at,
+            }
+            sort_column = sort_columns.get(sort_by, Product.id)
 
         if order == "desc":
-            query = query.order_by(sort_column.desc())
+            query = query.order_by(sort_column.desc(), Product.id.desc())
         else:
-            query = query.order_by(sort_column.asc())
+            query = query.order_by(sort_column.asc(), Product.id.asc())
 
-        return query.paginate(page=page, per_page=limit, error_out=False)
+        paginated = query.paginate(page=page, per_page=limit, error_out=False)
+        ProductRepository._attach_sold_count(paginated.items)
+        return paginated
 
     @staticmethod
     def get_by_category_id(category_id, sort_by="id", order="asc", page=1, limit=10):
@@ -114,20 +158,27 @@ class ProductRepository:
             SubCategory.is_active == True,
         )
 
-        sort_columns = {
-            "id": Product.id,
-            "name": Product.name,
-            "price": Product.price,
-            "created_at": Product.created_at,
-        }
-        sort_column = sort_columns.get(sort_by, Product.id)
+        if sort_by == "best_selling":
+            sold = ProductRepository._sold_subquery()
+            sort_column = func.coalesce(sold.c.sold, 0)
+            query = query.outerjoin(sold, sold.c.product_id == Product.id)
+        else:
+            sort_columns = {
+                "id": Product.id,
+                "name": Product.name,
+                "price": Product.price,
+                "created_at": Product.created_at,
+            }
+            sort_column = sort_columns.get(sort_by, Product.id)
 
         if order == "desc":
-            query = query.order_by(sort_column.desc())
+            query = query.order_by(sort_column.desc(), Product.id.desc())
         else:
-            query = query.order_by(sort_column.asc())
+            query = query.order_by(sort_column.asc(), Product.id.asc())
 
-        return query.paginate(page=page, per_page=limit, error_out=False)
+        paginated = query.paginate(page=page, per_page=limit, error_out=False)
+        ProductRepository._attach_sold_count(paginated.items)
+        return paginated
 
     @staticmethod
     def soft_delete(product):
