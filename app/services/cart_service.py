@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from app.repositories.cart_repository import CartRepository
 from app.services.order_service import OrderService
+from app.utils.images import build_image_url
 
 
 class ProductNotFoundError(Exception):
@@ -200,7 +201,7 @@ class CartService:
                 'price': unit_price,
                 'stock': product.stock if product else None,
                 'is_active': product.is_active if product else None,
-                'image': primary.url if primary else None,
+                'image': build_image_url(primary.url) if primary else None,
             } if product else None,
         }
 

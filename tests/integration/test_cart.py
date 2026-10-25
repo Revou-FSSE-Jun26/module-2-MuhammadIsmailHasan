@@ -157,6 +157,20 @@ class TestSellerGrouping:
 
         assert item['product']['image'] == 'http://img/a.jpg'
 
+    def test_relative_image_key_gets_base_url(self, client, seed_users, seed_products, db):
+        token = _buyer_token(client)
+        product = seed_products[0]
+        db.session.add(ProductImage(product_id=product.id, url='products/1/a.png', order=0))
+        db.session.commit()
+
+        response = client.post('/api/v1/cart/items', json={
+            'product_id': product.id, 'quantity': 1,
+        }, headers=auth_header(token))
+        item = response.get_json()['data']['groups'][0]['items'][0]
+
+        assert item['product']['image'].endswith('/products/1/a.png')
+        assert item['product']['image'].startswith(('http://', 'https://', '/'))
+
 
 class TestUpdateAndRemove:
 
