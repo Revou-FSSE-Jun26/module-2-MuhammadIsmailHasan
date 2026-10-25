@@ -68,6 +68,41 @@ class LoginSchema(Schema):
         return data
 
 
+class ChangeEmailSchema(Schema):
+    email = fields.String(
+        required=True,
+        validate=validate.Length(min=1, max=100),
+        error_messages={"required": "email is required"},
+    )
+    current_password = fields.String(
+        required=True,
+        error_messages={"required": "current_password is required"},
+    )
+
+    @pre_load
+    def strip_fields(self, data, **kwargs):
+        if 'email' in data and isinstance(data['email'], str):
+            data['email'] = data['email'].strip() or None
+        return data
+
+    @validates('email')
+    def validate_email(self, value, **kwargs):
+        if value and not EMAIL_REGEX.match(value):
+            raise ValidationError("invalid email format")
+
+
+class ChangePasswordSchema(Schema):
+    current_password = fields.String(
+        required=True,
+        error_messages={"required": "current_password is required"},
+    )
+    new_password = fields.String(
+        required=True,
+        validate=validate.Length(min=6, max=128),
+        error_messages={"required": "new_password is required"},
+    )
+
+
 class UserResponseSchema(Schema):
     id = fields.Integer()
     username = fields.String()

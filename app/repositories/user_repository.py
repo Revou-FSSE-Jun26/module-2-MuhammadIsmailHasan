@@ -31,6 +31,18 @@ class UserRepository:
         db.session.commit()
 
     @staticmethod
+    def update_email(user, email):
+        user.email = email
+        db.session.commit()
+        return user
+
+    @staticmethod
+    def update_password(user, hashed_password):
+        user.password_hash = hashed_password
+        db.session.commit()
+        return user
+
+    @staticmethod
     def soft_delete(user):
         user.is_active = False
         db.session.commit()

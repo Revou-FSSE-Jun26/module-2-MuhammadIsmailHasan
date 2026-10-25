@@ -6,6 +6,8 @@ from app.schemas.user_schema import (
     RegisterUserSchema,
     UserResponseSchema,
     UserPublicResponseSchema,
+    ChangeEmailSchema,
+    ChangePasswordSchema,
 )
 from app.services.user_service import (
     UserService,
@@ -13,6 +15,8 @@ from app.services.user_service import (
     UsernameAlreadyExistsError,
     EmailAlreadyExistsError,
     DeletePermissionError,
+    WrongPasswordError,
+    SamePasswordError,
 )
 from app.auth import roles_required
 from app.utils.auth_context import current_user_id, current_role
@@ -59,6 +63,50 @@ class UserMe(MethodView):
             'get user data successful',
             UserResponseSchema().dump(user),
         )
+
+
+@users_blp.route('/me/email')
+class UserMeEmail(MethodView):
+
+    @users_blp.arguments(ChangeEmailSchema)
+    @roles_required('seller', 'buyer', 'admin')
+    def put(self, validated_data):
+        try:
+            user = UserService.change_email(
+                current_user_id(),
+                validated_data['email'],
+                validated_data['current_password'],
+            )
+        except UserNotFoundError as e:
+            abort(404, message=str(e))
+        except WrongPasswordError as e:
+            abort(400, message=str(e))
+        except EmailAlreadyExistsError as e:
+            abort(409, message=str(e))
+
+        return make_response('email updated', UserResponseSchema().dump(user))
+
+
+@users_blp.route('/me/password')
+class UserMePassword(MethodView):
+
+    @users_blp.arguments(ChangePasswordSchema)
+    @roles_required('seller', 'buyer', 'admin')
+    def put(self, validated_data):
+        try:
+            UserService.change_password(
+                current_user_id(),
+                validated_data['current_password'],
+                validated_data['new_password'],
+            )
+        except UserNotFoundError as e:
+            abort(404, message=str(e))
+        except WrongPasswordError as e:
+            abort(400, message=str(e))
+        except SamePasswordError as e:
+            abort(422, message=str(e))
+
+        return make_response('password updated')
 
 
 @users_blp.route('/<int:user_id>')
