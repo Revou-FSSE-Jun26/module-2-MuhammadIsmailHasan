@@ -6,6 +6,7 @@ from flask import current_app
 from app.extensions import db
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.order_repository import OrderRepository
+from app.models.orders import OrderStatusHistory
 from app.models.products import Product
 from app.models.users import User
 from app.utils.timezone import utcnow
@@ -185,6 +186,14 @@ class PaymentService:
             return payment
 
         if payment.status == new_payment_status:
+            settlement_time = _parse_dt(payload.get('settlement_time'))
+            if settlement_time and not payment.settlement_time:
+                payment.settlement_time = settlement_time
+                db.session.commit()
+                current_app.logger.info(
+                    'payment %s settlement time recorded', payment.id,
+                )
+                return payment
             current_app.logger.info(
                 'payment %s already in status %s, ignoring duplicate',
                 payment.id, new_payment_status,
@@ -254,7 +263,14 @@ class PaymentService:
         if target_status == 'paid' and order.status != 'waiting_for_payment':
             return
 
+        previous_status = order.status
         order.status = target_status
+        db.session.add(OrderStatusHistory(
+            order_id=order.id,
+            from_status=previous_status,
+            to_status=target_status,
+            changed_by=None,
+        ))
 
         if target_status == 'cancelled':
             for item in order.items:

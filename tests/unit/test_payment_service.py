@@ -301,6 +301,29 @@ class TestHandleNotification:
 
         assert not payment_repo.update_from_notification.called
 
+    def test_order_status_change_is_recorded_in_history(self, app_ctx, payment_repo, order_repo, db_session):
+        payment_repo.get_by_reference.return_value = make_payment(status='pending')
+        order_repo.get_by_id.return_value = make_order(status='waiting_for_payment')
+
+        PaymentService.handle_notification(signed_payload('order-1-1', 'settlement'))
+
+        entry = db_session.add.call_args.args[0]
+        assert entry.from_status == 'waiting_for_payment'
+        assert entry.to_status == 'paid'
+        assert entry.changed_by is None
+
+    def test_duplicate_fills_missing_settlement_time(self, app_ctx, payment_repo, order_repo, db_session):
+        payment = make_payment(status='paid')
+        payment.settlement_time = None
+        payment_repo.get_by_reference.return_value = payment
+        payload = signed_payload('order-1-1', 'settlement')
+        payload['settlement_time'] = '2026-10-31 10:00:00'
+
+        PaymentService.handle_notification(payload)
+
+        assert payment.settlement_time is not None
+        assert not payment_repo.update_from_notification.called
+
     def test_late_deny_after_paid_ignored(self, app_ctx, payment_repo, order_repo, db_session):
         payment = make_payment(status='paid')
         payment_repo.get_by_reference.return_value = payment
