@@ -80,9 +80,20 @@ class PaymentDetail(MethodView):
 class MidtransWebhook(MethodView):
 
     def post(self):
+        current_app.logger.info(
+            'midtrans webhook hit from %s',
+            request.headers.get('X-Forwarded-For', request.remote_addr),
+        )
+
         payload = request.get_json(silent=True)
         if not payload:
+            current_app.logger.warning('midtrans webhook rejected: missing JSON body')
             abort(400, message="invalid or missing JSON body")
+
+        current_app.logger.info(
+            'midtrans webhook received order_id=%s transaction_status=%s',
+            payload.get('order_id'), payload.get('transaction_status'),
+        )
 
         errors = MidtransNotificationSchema().validate(payload)
         if errors:

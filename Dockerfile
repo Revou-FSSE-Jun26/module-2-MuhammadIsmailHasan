@@ -30,4 +30,4 @@ ENV GUNICORN_WORKERS=3 \
 EXPOSE 5000
 
 ENTRYPOINT ["entrypoint.sh"]
-CMD gunicorn --bind 0.0.0.0:${PORT} --workers ${GUNICORN_WORKERS} run:application
+CMD gunicorn --bind 0.0.0.0:${PORT} --workers ${GUNICORN_WORKERS} --access-logfile - run:application

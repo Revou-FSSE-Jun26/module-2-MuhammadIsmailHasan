@@ -184,6 +184,28 @@ it. The order should move to `paid`.
   on increasing intervals for about a day. The handler is idempotent (it ignores
   a duplicate that matches the current status) and always returns `200`.
 
+## Checking That the Webhook Arrived
+
+Every webhook request is logged. In the app log (or the Render logs), look for:
+
+- `midtrans webhook hit from <ip>`: a request reached the endpoint.
+- `midtrans webhook received order_id=... transaction_status=...`: the body was valid JSON.
+- `payment X -> paid, order Y reacted`: the notification was processed.
+- `rejected webhook: invalid signature`: the server key does not match the dashboard.
+
+If none of these appear after a payment, the request never reached the app.
+Check the Payment Notification URL in the Midtrans dashboard, then open
+**Settings -> Configuration -> See History**, pick a row with type HTTP, click
+**Details** and replay the request body against the endpoint:
+
+```bash
+curl -i -X POST https://YOUR-BACKEND/api/v1/payments/webhook/midtrans \
+  -H "Content-Type: application/json" \
+  -d '<request body copied from Midtrans>'
+```
+
+A `200` response means the backend handles it correctly.
+
 ## Short Version (No Webhook)
 
 Steps 1 to 8 alone test the main part: create a payment and get the Midtrans
