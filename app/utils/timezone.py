@@ -1,5 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+WIB = timezone(timedelta(hours=7))
 
 
-def utcnow():
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+def now_wib():
+    return datetime.now(WIB).replace(tzinfo=None)

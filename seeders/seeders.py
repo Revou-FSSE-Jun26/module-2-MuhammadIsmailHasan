@@ -31,7 +31,7 @@ from seeders.scraped import build_rows, load_products
 import bcrypt
 from datetime import timedelta
 from decimal import Decimal
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 
 app = create_app()
 
@@ -151,7 +151,7 @@ def seed_users():
                 email=user_data["email"],
                 password_hash=password_hash,
                 role=user_data["role"],
-                last_login=utcnow() - timedelta(days=1),
+                last_login=now_wib() - timedelta(days=1),
             )
             users.append(user)
 
@@ -188,7 +188,7 @@ def seed_products():
         return []
 
     try:
-        created_at = utcnow()
+        created_at = now_wib()
         db.session.bulk_insert_mappings(
             Product,
             [
@@ -237,7 +237,7 @@ def seed_product_images(rows=None):
             "url": url,
             "order": order,
             "is_active": True,
-            "created_at": utcnow(),
+            "created_at": now_wib(),
         }
         for row in rows
         if row.get("id")
@@ -358,7 +358,7 @@ def seed_orders():
                 total_amount=total_amount,
                 status=order_data["status"],
                 is_active=order_data.get("is_active", True),
-                ordered_at=utcnow() - timedelta(days=len(orders_data)),
+                ordered_at=now_wib() - timedelta(days=len(orders_data)),
                 shipping_recipient_name=default_address.recipient_name
                 if default_address
                 else None,

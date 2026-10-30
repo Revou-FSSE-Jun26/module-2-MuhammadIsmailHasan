@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 
 
 class UserAddress(db.Model):
@@ -28,8 +28,8 @@ class UserAddress(db.Model):
     city = db.Column(db.String(100), nullable=False)
     postal_code = db.Column(db.String(20))
     is_default = db.Column(db.Boolean, default=False, nullable=False)
-    created_at = db.Column(db.DateTime, default=utcnow)
-    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+    created_at = db.Column(db.DateTime, default=now_wib)
+    updated_at = db.Column(db.DateTime, default=now_wib, onupdate=now_wib)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 

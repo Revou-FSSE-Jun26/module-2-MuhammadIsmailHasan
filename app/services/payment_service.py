@@ -9,7 +9,7 @@ from app.repositories.order_repository import OrderRepository
 from app.models.orders import OrderStatusHistory
 from app.models.products import Product
 from app.models.users import User
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 from app.integrations.midtrans import create_snap_transaction, MidtransError
 from app.validation import (
     MIDTRANS_STATUS_TO_PAYMENT_STATUS,
@@ -69,7 +69,7 @@ class PaymentService:
         payment_reference = f"order-{order_id}-{attempt}"
 
         expiry_minutes = current_app.config.get('MIDTRANS_EXPIRY_MINUTES', 1440)
-        expires_at = utcnow() + timedelta(minutes=expiry_minutes)
+        expires_at = now_wib() + timedelta(minutes=expiry_minutes)
 
         payment = PaymentRepository.create(
             order_id=order_id,

@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 
 class Payment(db.Model):
     __tablename__ = 'payments'
@@ -20,8 +20,8 @@ class Payment(db.Model):
     settlement_time = db.Column(db.DateTime)
     expires_at = db.Column(db.DateTime, nullable=False)
     raw_response = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=utcnow)
+    created_at = db.Column(db.DateTime, default=now_wib)
+    updated_at = db.Column(db.DateTime, onupdate=now_wib)
 
     order = db.relationship('Order', back_populates='payments', lazy=True)
     

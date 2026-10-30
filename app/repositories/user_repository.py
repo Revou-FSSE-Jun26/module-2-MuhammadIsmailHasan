@@ -1,6 +1,6 @@
 from app.models.users import User
 from app.extensions import db
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 
 
 class UserRepository:
@@ -27,7 +27,7 @@ class UserRepository:
 
     @staticmethod
     def update_last_login(user):
-        user.last_login = utcnow()
+        user.last_login = now_wib()
         db.session.commit()
 
     @staticmethod

@@ -4,7 +4,7 @@ from app.models.orders import Order, OrderItem, OrderStatusHistory
 from app.models.products import Product
 from app.models.product_images import ProductImage
 from app.extensions import db
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 from decimal import Decimal
 
 
@@ -158,7 +158,7 @@ class OrderRepository:
     def delete_order(order, updated_by=None):
         order.is_active = False
         order.updated_by = updated_by
-        order.deleted_at = utcnow()
+        order.deleted_at = now_wib()
         
         db.session.commit()
         return order

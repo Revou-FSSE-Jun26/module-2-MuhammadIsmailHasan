@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 
 
 class Order(db.Model):
@@ -21,7 +21,7 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='RESTRICT', name='fk_orders_user_id'), nullable=False, index=True)
     total_amount = db.Column(db.Numeric(14, 2), nullable=False)
     status = db.Column(db.String(25), nullable=False, server_default='waiting_for_payment')
-    ordered_at = db.Column(db.DateTime, default=utcnow)
+    ordered_at = db.Column(db.DateTime, default=now_wib)
     deleted_at = db.Column(db.DateTime, nullable=True)
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_orders_updated_by'), nullable=True, index=True)
 
@@ -109,6 +109,6 @@ class OrderStatusHistory(db.Model):
     to_status = db.Column(db.String(25), nullable=False)
     changed_by = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL', name='fk_order_status_history_changed_by'), nullable=True, index=True)
     tracking_id = db.Column(db.String(100), nullable=True)
-    created_at = db.Column(db.DateTime, default=utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=now_wib, nullable=False)
 
     changed_by_user = db.relationship('User', foreign_keys=[changed_by], lazy=True)

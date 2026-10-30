@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.utils.timezone import utcnow
+from app.utils.timezone import now_wib
 from app.utils.images import build_image_url
 
 
@@ -19,7 +19,7 @@ class ProductImage(db.Model):
     )
     url = db.Column(db.String(500), nullable=False)
     order = db.Column(db.Integer, nullable=False, default=0)
-    created_at = db.Column(db.DateTime, default=utcnow)
+    created_at = db.Column(db.DateTime, default=now_wib)
 
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
